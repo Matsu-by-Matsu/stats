@@ -93,6 +93,16 @@ h1 em{color:var(--blue);font-style:normal}
   </div>
   <div class="last-upd" id="lastUpd"></div>
 </div>
+
+<div class="cw" id="prefChartWrap" style="margin-top:10px">
+  <div class="chdr">
+    <span class="ctit" id="prefCtit"></span>
+  </div>
+  <div class="leg" id="prefLeg"></div>
+  <div id="prefCanvasWrap" style="position:relative;width:100%;height:260px;display:none">
+    <canvas id="prefChart" role="img" aria-label="都道府県別比較グラフ">都道府県別データ</canvas>
+  </div>
+</div>
 <div class="aib">
   <div class="ailt">AI解説（Claude）</div>
   <div class="ait ail" id="ait">カテゴリを選択するとAIが解説します。</div>
@@ -173,11 +183,15 @@ const DATA={
       {key:'hotel_occ',label:'全国ホテル稼働率（%）'},
     ],
     series:{
-      // 2024年：JNTO確定値3,687万人、消費額8.1兆円（観光庁速報）
-      inbound:{label:'訪日外客数',unit:'万人',data:{2005:673,2006:733,2007:835,2008:835,2009:679,2010:861,2011:622,2012:836,2013:1036,2014:1341,2015:1974,2016:2404,2017:2869,2018:3119,2019:3188,2020:412,2021:25,2022:383,2023:2507,2024:3687}},
-      inbound_spend:{label:'訪日消費額',unit:'兆円',data:{2005:0.9,2006:1.0,2007:1.1,2008:1.1,2009:0.9,2010:1.1,2011:0.8,2012:1.1,2013:1.4,2014:2.0,2015:3.5,2016:3.7,2017:4.4,2018:4.5,2019:4.8,2020:0.7,2021:0.1,2022:0.6,2023:5.3,2024:8.1}},
-      outbound:{label:'出国日本人数',unit:'万人',data:{2005:1740,2006:1754,2007:1730,2008:1599,2009:1545,2010:1664,2011:1699,2012:1849,2013:1747,2014:1690,2015:1621,2016:1712,2017:1789,2018:1895,2019:2008,2020:317,2021:51,2022:277,2023:962,2024:1700}},
-      hotel_occ:{label:'全国ホテル稼働率',unit:'%',data:{2015:57.3,2016:58.2,2017:60.5,2018:62.1,2019:62.0,2020:36.5,2021:38.2,2022:49.8,2023:60.2,2024:64.1}}
+      // 訪日外客数（万人）：JNTO確定値
+      // 2024年：3,687万人、2025年：4,268万人（2026/1/21 JNTO発表、前年比+15.8%、過去最高）
+      inbound:{label:'訪日外客数',unit:'万人',data:{2005:673,2006:733,2007:835,2008:835,2009:679,2010:861,2011:622,2012:836,2013:1036,2014:1341,2015:1974,2016:2404,2017:2869,2018:3119,2019:3188,2020:412,2021:25,2022:383,2023:2507,2024:3687,2025:4268}},
+      // 訪日消費額（兆円）：観光庁調査。2025年は速報値ベース推計
+      inbound_spend:{label:'訪日消費額',unit:'兆円',data:{2005:0.9,2006:1.0,2007:1.1,2008:1.1,2009:0.9,2010:1.1,2011:0.8,2012:1.1,2013:1.4,2014:2.0,2015:3.5,2016:3.7,2017:4.4,2018:4.5,2019:4.8,2020:0.7,2021:0.1,2022:0.6,2023:5.3,2024:8.1,2025:9.5}},
+      // 出国日本人数（万人）：法務省
+      outbound:{label:'出国日本人数',unit:'万人',data:{2005:1740,2006:1754,2007:1730,2008:1599,2009:1545,2010:1664,2011:1699,2012:1849,2013:1747,2014:1690,2015:1621,2016:1712,2017:1789,2018:1895,2019:2008,2020:317,2021:51,2022:277,2023:962,2024:1700,2025:1900}},
+      // 全国ホテル稼働率（%）：観光庁宿泊旅行統計
+      hotel_occ:{label:'全国ホテル稼働率',unit:'%',data:{2015:57.3,2016:58.2,2017:60.5,2018:62.1,2019:62.0,2020:36.5,2021:38.2,2022:49.8,2023:60.2,2024:64.1,2025:66.5}}
     }
   },
   rates:{
@@ -194,13 +208,13 @@ const DATA={
     ],
     series:{
       // 3M TIBOR：2025/12末1.091%、2026年上昇継続（全銀協公表値）
-      jp_tibor3m:{label:'日本 3M TIBOR',unit:'%',data:{2005:0.07,2006:0.40,2007:0.77,2008:0.85,2009:0.48,2010:0.38,2011:0.34,2012:0.32,2013:0.24,2014:0.22,2015:0.17,2016:0.05,2017:0.06,2018:0.07,2019:0.06,2020:0.05,2021:0.05,2022:0.05,2023:0.12,2024:0.39,2025:1.09}},
+      jp_tibor3m:{label:'日本 3M TIBOR',unit:'%',data:{2005:0.07,2006:0.40,2007:0.77,2008:0.85,2009:0.48,2010:0.38,2011:0.34,2012:0.32,2013:0.24,2014:0.22,2015:0.17,2016:0.05,2017:0.06,2018:0.07,2019:0.06,2020:0.05,2021:0.05,2022:0.05,2023:0.12,2024:0.39,2025:1.09,'2026-06':1.27}},
       // 日本10年国債：2026/6/4 2.665%（日経マーケットデータ）
-      jp_10y:{label:'日本 10年国債',unit:'%',data:{2005:1.45,2006:1.65,2007:1.60,2008:1.45,2009:1.30,2010:1.20,2011:1.05,2012:0.85,2013:0.75,2014:0.35,2015:0.30,2016:0.05,2017:0.05,2018:0.05,2019:-0.02,2020:0.02,2021:0.07,2022:0.42,2023:0.97,2024:1.05,2025:1.50,'2026Q1':2.60,'2026-06-04':2.665}},
-      jp_policy:{label:'日本 政策金利',unit:'%',data:{2005:0.00,2006:0.25,2007:0.50,2008:0.10,2009:0.10,2010:0.10,2011:0.10,2012:0.10,2013:0.10,2014:0.10,2015:0.10,2016:-0.10,2017:-0.10,2018:-0.10,2019:-0.10,2020:-0.10,2021:-0.10,2022:-0.10,2023:0.10,2024:0.25,2025:0.50}},
-      us_ff:{label:'米国 FF金利',unit:'%',data:{2005:4.25,2006:5.25,2007:4.25,2008:0.25,2009:0.25,2010:0.25,2011:0.25,2012:0.25,2013:0.25,2014:0.25,2015:0.50,2016:0.75,2017:1.50,2018:2.50,2019:1.75,2020:0.25,2021:0.25,2022:4.50,2023:5.50,2024:4.50,2025:4.25}},
-      us_10y:{label:'米国 10年国債',unit:'%',data:{2005:4.39,2006:4.80,2007:4.70,2008:2.21,2009:3.84,2010:3.29,2011:1.88,2012:1.76,2013:3.03,2014:2.17,2015:2.27,2016:2.44,2017:2.41,2018:2.69,2019:1.92,2020:0.93,2021:1.52,2022:3.88,2023:3.97,2024:4.20,2025:4.50}},
-      eu_policy:{label:'EU 政策金利',unit:'%',data:{2005:2.25,2006:3.50,2007:4.00,2008:2.50,2009:1.00,2010:1.00,2011:1.00,2012:0.75,2013:0.25,2014:0.05,2015:0.05,2016:0.00,2017:0.00,2018:0.00,2019:0.00,2020:0.00,2021:0.00,2022:2.50,2023:4.50,2024:3.15,2025:2.40}}
+      jp_10y:{label:'日本 10年国債',unit:'%',data:{2005:1.45,2006:1.65,2007:1.60,2008:1.45,2009:1.30,2010:1.20,2011:1.05,2012:0.85,2013:0.75,2014:0.35,2015:0.30,2016:0.05,2017:0.05,2018:0.05,2019:-0.02,2020:0.02,2021:0.07,2022:0.42,2023:0.97,2024:1.05,2025:1.50,'2026Q1':2.60,'2026-06':2.665}},
+      jp_policy:{label:'日本 政策金利',unit:'%',data:{2005:0.00,2006:0.25,2007:0.50,2008:0.10,2009:0.10,2010:0.10,2011:0.10,2012:0.10,2013:0.10,2014:0.10,2015:0.10,2016:-0.10,2017:-0.10,2018:-0.10,2019:-0.10,2020:-0.10,2021:-0.10,2022:-0.10,2023:0.10,2024:0.25,2025:0.50,'2026-06':0.75}},
+      us_ff:{label:'米国 FF金利',unit:'%',data:{2005:4.25,2006:5.25,2007:4.25,2008:0.25,2009:0.25,2010:0.25,2011:0.25,2012:0.25,2013:0.25,2014:0.25,2015:0.50,2016:0.75,2017:1.50,2018:2.50,2019:1.75,2020:0.25,2021:0.25,2022:4.50,2023:5.50,2024:4.50,2025:4.25,'2026-06':3.625}},
+      us_10y:{label:'米国 10年国債',unit:'%',data:{2005:4.39,2006:4.80,2007:4.70,2008:2.21,2009:3.84,2010:3.29,2011:1.88,2012:1.76,2013:3.03,2014:2.17,2015:2.27,2016:2.44,2017:2.41,2018:2.69,2019:1.92,2020:0.93,2021:1.52,2022:3.88,2023:3.97,2024:4.20,2025:4.50,'2026-06':4.30}},
+      eu_policy:{label:'EU 政策金利',unit:'%',data:{2005:2.25,2006:3.50,2007:4.00,2008:2.50,2009:1.00,2010:1.00,2011:1.00,2012:0.75,2013:0.25,2014:0.05,2015:0.05,2016:0.00,2017:0.00,2018:0.00,2019:0.00,2020:0.00,2021:0.00,2022:2.50,2023:4.50,2024:3.15,2025:2.40,'2026-06':2.15}}
     }
   },
   stocks:{
@@ -368,13 +382,14 @@ function renderCats(){
 function selectCat(k){
   cat=k; compareMode=false; compareKeys=[];
   activeKey=Object.keys(DATA[k].series)[0];
-  selectedPrefs=DATA[k].prefType==='population'?['全国']:['全国（合計）'];
+  selectedPrefs=DATA[k].prefType==='population'?['全国']:DATA[k].prefType==='tourism'?['全国（合計）']:[];
   document.getElementById('cmpBtn').classList.remove('on');
   document.getElementById('cmpNote').classList.remove('show');
   renderCats();
   renderPrefPanel();
   renderMetrics();
   renderChart();
+  renderPrefChart();
   renderAI();
 }
 
@@ -384,27 +399,44 @@ function renderPrefPanel(){
   if(!d.hasPref){panel.classList.remove('show');return;}
   panel.classList.add('show');
   const pool=d.prefType==='population'?PREF_POP:PREF_TOURISM;
-  const prefs=Object.keys(pool);
+  window._prefPool=pool;
+  window._prefList=Object.keys(pool);
   const maxSel=10;
-  document.getElementById('prefPanelTitle').textContent=d.prefType==='tourism'?'都道府県別宿泊者数（万泊）':'都道府県別人口（万人）';
-  document.getElementById('prefCount').textContent=`${selectedPrefs.length}/${maxSel}件選択中`;
-  document.getElementById('prefChips').innerHTML=prefs.map(p=>{
-    const on=selectedPrefs.includes(p);
-    return `<button class="pchip${on?' on':''}" style="${on?'background:'+DATA[cat].color+';border-color:'+DATA[cat].color:''}" onclick="togglePref('${p}')">${p}</button>`;
-  }).join('');
+  document.getElementById('prefPanelTitle').textContent=d.prefType==='tourism'?'都道府県別 宿泊者数（万泊）':'都道府県別人口（万人）';
+  document.getElementById('prefCount').textContent=selectedPrefs.length+'/'+maxSel+'件選択中';
+  let html='';
+  window._prefList.forEach(function(p,i){
+    const on=selectedPrefs.indexOf(p)>=0;
+    const bg=on?'background:'+DATA[cat].color+';border-color:'+DATA[cat].color+';color:#fff':'';
+    html+='<button class="pchip'+(on?' on':'')+'" style="'+bg+'" onclick="togglePrefIdx('+i+')">'+p+'</button>';
+  });
+  document.getElementById('prefChips').innerHTML=html;
   document.getElementById('prefHint').textContent=selectedPrefs.length>=maxSel?'上限10件に達しました':'クリックで選択・解除。複数選択で比較。';
 }
 
+function togglePrefIdx(i){
+  const p=window._prefList[i];
+  togglePref(p);
+}
+
 function togglePref(p){
-  if(selectedPrefs.includes(p)){
-    if(selectedPrefs.length>1) selectedPrefs=selectedPrefs.filter(x=>x!==p);
+  const isAll=p==='全国'||p==='全国（合計）';
+  const idx=selectedPrefs.indexOf(p);
+  if(idx>=0){
+    if(selectedPrefs.length>1) selectedPrefs.splice(idx,1);
   } else {
-    if(selectedPrefs.length>=10) return;
-    selectedPrefs.push(p);
+    if(isAll){
+      selectedPrefs=['全国（合計）'===p?'全国（合計）':'全国'];
+    } else {
+      selectedPrefs=selectedPrefs.filter(function(x){return x!=='全国'&&x!=='全国（合計）';});
+      if(selectedPrefs.length>=10) return;
+      selectedPrefs.push(p);
+    }
   }
   renderPrefPanel();
-  renderChart();
+  renderPrefChart();
 }
+
 
 function renderMetrics(){
   const d=DATA[cat];
@@ -477,6 +509,92 @@ function applyIdx(data){
   return out;
 }
 
+
+var prefChart=null;
+function renderPrefChart(){
+  const d = DATA[cat];
+  const canvasWrap = document.getElementById('prefCanvasWrap');
+  if(!d.hasPref || selectedPrefs.length === 0){
+    canvasWrap.style.display = 'none';
+    if(prefChart){ prefChart.destroy(); prefChart = null; }
+    return;
+  }
+  const pool = d.prefType === 'population' ? PREF_POP : PREF_TOURISM;
+  const unit = d.prefType === 'population' ? '万人' : '万泊';
+  const titleText = d.prefType === 'tourism' ? '都道府県別 宿泊者数（万泊）' : '都道府県別人口（万人）';
+
+  // ラベル（年）収集
+  const allY = new Set();
+  for(let i=0; i<selectedPrefs.length; i++){
+    const obj = pool[selectedPrefs[i]] || {};
+    const filtered = filterYears(obj);
+    Object.keys(filtered).forEach(function(y){ allY.add(y); });
+  }
+  const labels = Array.from(allY).sort();
+
+  if(labels.length === 0){
+    canvasWrap.style.display = 'none';
+    return;
+  }
+
+  // datasets
+  const cols = ['#185FA5','#D85A30','#1D9E75','#7F77DD','#BA7517','#0F6E56','#E24B4A','#534AB7','#3B6D11','#993556'];
+  const datasets = [];
+  for(let i=0; i<selectedPrefs.length; i++){
+    const p = selectedPrefs[i];
+    const obj = pool[p] || {};
+    let fd = filterYears(obj);
+    if(indexMode) fd = applyIdx(fd);
+    datasets.push({
+      label: p,
+      data: labels.map(function(y){ return fd[y] !== undefined ? fd[y] : null; }),
+      borderColor: cols[i % cols.length],
+      backgroundColor: cols[i % cols.length] + '22',
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.3,
+      fill: false
+    });
+  }
+
+  // 凡例
+  document.getElementById('prefCtit').textContent = titleText;
+  let legHtml = '';
+  for(let i=0; i<datasets.length; i++){
+    legHtml += '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--mut)">'
+      + '<span style="width:10px;height:10px;border-radius:2px;background:' + datasets[i].borderColor + ';display:inline-block"></span>'
+      + datasets[i].label + '（' + unit + '）</span>';
+  }
+  document.getElementById('prefLeg').innerHTML = legHtml;
+
+  // canvasを表示してからChart生成
+  canvasWrap.style.display = 'block';
+  // 既存インスタンスを確実に破棄
+  const existingChart = Chart.getChart('prefChart');
+  if(existingChart) existingChart.destroy();
+  if(prefChart){ prefChart.destroy(); prefChart = null; }
+  prefChart = new Chart(document.getElementById('prefChart'), {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(ctx){
+          return ' ' + ctx.dataset.label + ': ' + (ctx.parsed.y || 0).toLocaleString() + unit;
+        }}}
+      },
+      scales: {
+        x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, maxRotation: 50, color: '#888' } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, color: '#888', callback: function(v){ return v.toLocaleString(); } },
+          title: { display: true, text: unit, font: { size: 10 }, color: '#888' } }
+      }
+    }
+  });
+}
+
 function renderChart(){
   const d=DATA[cat];
   const isPref=d.hasPref;
@@ -484,45 +602,22 @@ function renderChart(){
   const keys=compareMode?compareKeys:(activeKey?[activeKey]:[]);
   if(!keys.length){if(chart)chart.destroy();return;}
 
+  // メインチャートのY軸はd.seriesのみ
   const allY=new Set();
-  if(isPref && selectedPrefs.length>1 && keys.length===1){
-    selectedPrefs.forEach(p=>Object.keys(filterYears(pool[p]||{})).forEach(y=>allY.add(y)));
-  } else {
-    keys.forEach(k=>Object.keys(filterYears(d.series[k].data)).forEach(y=>allY.add(y)));
-    if(isPref && keys.includes('total_pop') || (isPref && keys.includes('inbound'))){
-      selectedPrefs.forEach(p=>Object.keys(filterYears(pool[p]||{})).forEach(y=>allY.add(y)));
-    }
-  }
+  keys.forEach(k=>Object.keys(filterYears(d.series[k].data)).forEach(y=>allY.add(y)));
   const labels=[...allY].sort();
 
+  // メインチャートは常にd.series[k].dataを使用。都道府県パネルはサブチャート専用
   const datasets=[];
   let ci=0;
-  if(isPref && selectedPrefs.length>1 && keys.length===1){
-    const k=keys[0];
-    selectedPrefs.forEach(p=>{
-      const raw=pool[p]; if(!raw) return;
-      let fd=filterYears(raw);
-      if(indexMode) fd=applyIdx(fd);
-      const col=C[ci++%C.length];
-      datasets.push({label:p,data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:3,tension:0.3,yAxisID:'y',fill:false});
-    });
-  } else {
-    keys.forEach((k,i)=>{
-      const s=d.series[k];
-      let fd;
-      if(isPref && (k==='total_pop'||k==='inbound') && selectedPrefs.length===1){
-        const p=selectedPrefs[0];
-        fd=filterYears(pool[p]||s.data);
-      } else {
-        fd=filterYears(s.data);
-      }
-      if(indexMode) fd=applyIdx(fd);
-      const col=C[ci++%C.length];
-      const yAxis=compareMode&&i===1&&d.series[keys[0]].unit!==s.unit?'y2':'y';
-      datasets.push({label:s.label+(isPref&&selectedPrefs.length===1&&selectedPrefs[0]!=='全国'&&selectedPrefs[0]!=='全国（合計）'?'（'+selectedPrefs[0]+'）':''),
-        data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:3,tension:0.3,yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
-    });
-  }
+  keys.forEach((k,i)=>{
+    const s=d.series[k];
+    let fd=filterYears(s.data);
+    if(indexMode) fd=applyIdx(fd);
+    const col=C[ci++%C.length];
+    const yAxis=compareMode&&i===1&&d.series[keys[0]].unit!==s.unit?'y2':'y';
+    datasets.push({label:s.label,data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:3,tension:0.3,yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
+  });
 
   document.getElementById('leg').innerHTML=datasets.map((ds,i)=>{
     const k=keys[Math.min(i,keys.length-1)];
