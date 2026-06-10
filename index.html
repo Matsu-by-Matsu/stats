@@ -862,14 +862,40 @@ function switchTab(tab){
 
 // ===================== NEWS =====================
 const NEWS_REGIONS = [
-  {key:'jp', label:'🇯🇵 日本', query:'日本 最新ニュース 経済 政治 今日'},
-  {key:'us', label:'🇺🇸 米国', query:'United States latest news economy market today'},
-  {key:'cn', label:'🇨🇳 中国', query:'China latest news economy market today'},
-  {key:'eu', label:'🇪🇺 欧州', query:'Europe EU latest news economy market today'},
-  {key:'au', label:'🇦🇺 豪州', query:'Australia latest news economy market today'},
-  {key:'kr', label:'🇰🇷 韓国', query:'South Korea latest news economy market today'},
-  {key:'th', label:'🇹🇭 タイ', query:'Thailand latest news economy market today'},
-  {key:'global', label:'🌐 グローバル', query:'global market news financial economy today'},
+  {key:'jp', label:'🇯🇵 日本', feeds:[
+    {url:'https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja', name:'Googleニュース(日本)', category:'その他'},
+    {url:'https://news.google.com/rss/search?q=日本経済&hl=ja&gl=JP&ceid=JP:ja', name:'経済(日本)', category:'経済・金融'},
+    {url:'https://news.google.com/rss/search?q=不動産+地価&hl=ja&gl=JP&ceid=JP:ja', name:'不動産(日本)', category:'不動産・REIT'},
+  ]},
+  {key:'us', label:'🇺🇸 米国', feeds:[
+    {url:'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', name:'Google News(US)', category:'その他'},
+    {url:'https://news.google.com/rss/search?q=economy+market&hl=en-US&gl=US&ceid=US:en', name:'US Economy', category:'経済・金融'},
+    {url:'https://news.google.com/rss/search?q=Federal+Reserve+interest+rate&hl=en-US&gl=US&ceid=US:en', name:'FRB', category:'マーケット'},
+  ]},
+  {key:'cn', label:'🇨🇳 中国', feeds:[
+    {url:'https://news.google.com/rss/search?q=China+economy&hl=en-US&gl=US&ceid=US:en', name:'China Economy', category:'経済・金融'},
+    {url:'https://news.google.com/rss/search?q=China+policy&hl=en-US&gl=US&ceid=US:en', name:'China Policy', category:'政治・外交'},
+  ]},
+  {key:'eu', label:'🇪🇺 欧州', feeds:[
+    {url:'https://news.google.com/rss/search?q=Europe+economy+ECB&hl=en-US&gl=US&ceid=US:en', name:'Europe Economy', category:'経済・金融'},
+    {url:'https://news.google.com/rss/search?q=European+Union+policy&hl=en-US&gl=US&ceid=US:en', name:'EU Policy', category:'政治・外交'},
+  ]},
+  {key:'au', label:'🇦🇺 豪州', feeds:[
+    {url:'https://news.google.com/rss?hl=en-AU&gl=AU&ceid=AU:en', name:'Google News(AU)', category:'その他'},
+    {url:'https://news.google.com/rss/search?q=Australia+economy&hl=en-AU&gl=AU&ceid=AU:en', name:'AU Economy', category:'経済・金融'},
+  ]},
+  {key:'kr', label:'🇰🇷 韓国', feeds:[
+    {url:'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko', name:'Google뉴스(한국)', category:'その他'},
+    {url:'https://news.google.com/rss/search?q=한국+경제&hl=ko&gl=KR&ceid=KR:ko', name:'경제(한국)', category:'経済・金融'},
+  ]},
+  {key:'th', label:'🇹🇭 タイ', feeds:[
+    {url:'https://news.google.com/rss/search?q=Thailand+economy&hl=en-US&gl=US&ceid=US:en', name:'Thailand News', category:'その他'},
+  ]},
+  {key:'global', label:'🌐 グローバル', feeds:[
+    {url:'https://news.google.com/rss/search?q=global+economy+markets&hl=en-US&gl=US&ceid=US:en', name:'Global Markets', category:'マーケット'},
+    {url:'https://news.google.com/rss/search?q=real+estate+investment+global&hl=en-US&gl=US&ceid=US:en', name:'Global Real Estate', category:'不動産・REIT'},
+    {url:'https://news.google.com/rss/search?q=interest+rate+central+bank&hl=en-US&gl=US&ceid=US:en', name:'Central Banks', category:'マーケット'},
+  ]},
 ];
 const NEWS_CATS = ['すべて','経済・金融','不動産・REIT','マーケット','政治・外交','エネルギー','テック'];
 const CAT_COLORS = {'経済・金融':'#185FA5','不動産・REIT':'#7F77DD','マーケット':'#1D9E75','政治・外交':'#D85A30','エネルギー':'#BA7517','テック':'#0F6E56','その他':'#888'};
@@ -928,49 +954,54 @@ function renderNewsContent(){
 async function fetchNews(){
   if(newsFetching) return;
   newsFetching = true;
-  const btn = document.getElementById('newsUpdBtn');
+  var btn = document.getElementById('newsUpdBtn');
   btn.classList.add('loading');
-  btn.textContent = '\u53d6\u5f97\u4e2d...';
-  document.getElementById('newsContent').innerHTML = '<div class="news-loading">\u30cb\u30e5\u30fc\u30b9\u3092\u53d6\u5f97\u4e2d...</div>';
-  const region = NEWS_REGIONS.find(function(r){ return r.key===newsRegion; });
-  const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const sysprompt = 'You output only valid JSON arrays. No prose, no markdown, no code fences.';
-  const userprompt = 'Today is ' + today + '. Give me 6 recent important news items about [' + region.label + ']. '
-    + 'Output ONLY a JSON array in this exact format, nothing else:\n'
-    + '[{"headline":"Japanese headline under 30 chars","summary":"Japanese summary 60-80 chars","category":"one of: \u7d4c\u6e08\u30fb\u91d1\u878d \u30de\u30fc\u30b1\u30c3\u30c8 \u653f\u6cbb\u30fb\u5916\u4ea4 \u30a8\u30cd\u30eb\u30ae\u30fc \u30c6\u30c3\u30af \u305d\u306e\u4ed6","source":"media name","time":"today or X hours ago"}]';
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        system: sysprompt,
-        messages: [{role: 'user', content: userprompt}]
-      })
-    });
-    const data = await resp.json();
-    if(data.type === 'error') throw new Error(data.error.message);
-    const raw = (data.content || []).filter(function(b){ return b.type==='text'; }).map(function(b){ return b.text; }).join('').trim();
-    const cleaned = raw.replace(/^```[a-z]*[\r\n]*/,'').replace(/[\r\n]*```$/,'').trim();
-    let articles;
-    try {
-      articles = JSON.parse(cleaned);
-    } catch(e1) {
-      const m = cleaned.match(/\[[\s\S]+\]/);
-      if(!m) throw new Error('No JSON array found. Response: ' + raw.slice(0,150));
-      articles = JSON.parse(m[0]);
+  btn.textContent = '取得中...';
+  document.getElementById('newsContent').innerHTML = '<div class="news-loading">ニュースを取得中...</div>';
+  var region = NEWS_REGIONS.find(function(r){ return r.key===newsRegion; });
+  var feeds = region.feeds;
+  var done = 0;
+  var allArticles = [];
+  function finish(){
+    var articles = allArticles.filter(function(a){ return a.headline; });
+    if(articles.length === 0){
+      document.getElementById('newsContent').innerHTML = '<div class="news-err">記事を取得できませんでした。ブラウザのF12コンソールでエラーを確認してください</div>';
+    } else {
+      newsData[newsRegion] = articles;
+      document.getElementById('newsUpd').textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
+      renderNewsContent();
     }
-    if(!Array.isArray(articles) || articles.length === 0) throw new Error('Empty result');
-    newsData[newsRegion] = articles;
-    document.getElementById('newsUpd').textContent = '\u6700\u7d42\u66f4\u65b0: ' + new Date().toLocaleString('ja-JP');
-    renderNewsContent();
-  } catch(e) {
-    document.getElementById('newsContent').innerHTML = '<div class="news-err">\u53d6\u5f97\u5931\u6557: ' + e.message.slice(0,120) + '</div>';
+    newsFetching = false;
+    btn.classList.remove('loading');
+    btn.textContent = '最新ニュース取得';
   }
-  newsFetching = false;
-  btn.classList.remove('loading');
-  btn.textContent = '\ud83d\udd04 \u6700\u65b0\u30cb\u30e5\u30fc\u30b9\u53d6\u5f97';
+  feeds.forEach(function(feed){
+    var proxyUrl = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&count=5';
+    fetch(proxyUrl)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.status === 'ok'){
+          (d.items || []).forEach(function(item){
+            var desc = (item.description || item.content || '').replace(/<[^>]*>/g,'').trim();
+            allArticles.push({
+              headline: (item.title || '').slice(0,60),
+              summary: desc.slice(0,150),
+              category: feed.category || 'その他',
+              source: feed.name,
+              url: item.link || '',
+              time: item.pubDate ? new Date(item.pubDate).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''
+            });
+          });
+        } else {
+          console.warn(feed.name + ' error:', d.message);
+        }
+      })
+      .catch(function(e){ console.warn(feed.name, e.message); })
+      .finally(function(){
+        done++;
+        if(done === feeds.length) finish();
+      });
+  });
 }
 
 </script>
