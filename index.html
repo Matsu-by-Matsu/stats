@@ -929,17 +929,15 @@ async function fetchNews(){
   if(newsFetching) return;
   newsFetching = true;
   const btn = document.getElementById('newsUpdBtn');
-  btn.classList.add('loading'); btn.textContent = '🔄 取得中...';
-  document.getElementById('newsContent').innerHTML = '<div class="news-loading">ニュースを取得・要約中です...</div>';
-
-  const region = NEWS_REGIONS.find(r => r.key===newsRegion);
+  btn.classList.add('loading');
+  btn.textContent = '\u53d6\u5f97\u4e2d...';
+  document.getElementById('newsContent').innerHTML = '<div class="news-loading">\u30cb\u30e5\u30fc\u30b9\u3092\u53d6\u5f97\u4e2d...</div>';
+  const region = NEWS_REGIONS.find(function(r){ return r.key===newsRegion; });
   const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const prompt = 'あなたは世界のニュースを日本語で伝えるエディターです。'
-    + '今日は' + today + 'です。'
-    + '【' + region.label + '】の直近の重要ニュースを5〜7件、以下のJSON配列のみで出力してください。'
-    + '前置き・説明文・コードブロック記号は一切不要です。必ずJSON配列のみ出力してください。\n'
-    + '[{"headline":"30字以内の日本語見出し","summary":"60〜80字の日本語要約","category":"経済・金融|不動産・REIT|マーケット|政治・外交|エネルギー|テック|その他のどれか1つ","source":"メディア名","time":"何時間前または今日"}]';
-
+  const sysprompt = 'You output only valid JSON arrays. No prose, no markdown, no code fences.';
+  const userprompt = 'Today is ' + today + '. Give me 6 recent important news items about [' + region.label + ']. '
+    + 'Output ONLY a JSON array in this exact format, nothing else:\n'
+    + '[{"headline":"Japanese headline under 30 chars","summary":"Japanese summary 60-80 chars","category":"one of: \u7d4c\u6e08\u30fb\u91d1\u878d \u30de\u30fc\u30b1\u30c3\u30c8 \u653f\u6cbb\u30fb\u5916\u4ea4 \u30a8\u30cd\u30eb\u30ae\u30fc \u30c6\u30c3\u30af \u305d\u306e\u4ed6","source":"media name","time":"today or X hours ago"}]';
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -947,25 +945,32 @@ async function fetchNews(){
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1500,
-        messages: [{role: 'user', content: prompt}]
+        system: sysprompt,
+        messages: [{role: 'user', content: userprompt}]
       })
     });
     const data = await resp.json();
-    // テキストブロックを全て結合
-    const text = (data.content || []).filter(b => b.type==='text').map(b => b.text).join('').trim();
-    // JSON配列を抽出（前後の余分なテキストを除去）
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if(!jsonMatch) throw new Error('JSON array not found in: ' + text.slice(0,100));
-    const articles = JSON.parse(jsonMatch[0]);
-    if(!Array.isArray(articles) || articles.length === 0) throw new Error('Empty articles');
+    if(data.type === 'error') throw new Error(data.error.message);
+    const raw = (data.content || []).filter(function(b){ return b.type==='text'; }).map(function(b){ return b.text; }).join('').trim();
+    const cleaned = raw.replace(/^```[a-z]*[\r\n]*/,'').replace(/[\r\n]*```$/,'').trim();
+    let articles;
+    try {
+      articles = JSON.parse(cleaned);
+    } catch(e1) {
+      const m = cleaned.match(/\[[\s\S]+\]/);
+      if(!m) throw new Error('No JSON array found. Response: ' + raw.slice(0,150));
+      articles = JSON.parse(m[0]);
+    }
+    if(!Array.isArray(articles) || articles.length === 0) throw new Error('Empty result');
     newsData[newsRegion] = articles;
-    document.getElementById('newsUpd').textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
+    document.getElementById('newsUpd').textContent = '\u6700\u7d42\u66f4\u65b0: ' + new Date().toLocaleString('ja-JP');
     renderNewsContent();
   } catch(e) {
-    document.getElementById('newsContent').innerHTML = '<div class="news-err">取得に失敗しました: ' + e.message.slice(0,80) + '</div>';
+    document.getElementById('newsContent').innerHTML = '<div class="news-err">\u53d6\u5f97\u5931\u6557: ' + e.message.slice(0,120) + '</div>';
   }
   newsFetching = false;
-  btn.classList.remove('loading'); btn.textContent = '🔄 最新ニュース取得';
+  btn.classList.remove('loading');
+  btn.textContent = '\ud83d\udd04 \u6700\u65b0\u30cb\u30e5\u30fc\u30b9\u53d6\u5f97';
 }
 
 </script>
