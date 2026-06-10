@@ -930,16 +930,15 @@ async function fetchNews(){
   newsFetching = true;
   const btn = document.getElementById('newsUpdBtn');
   btn.classList.add('loading'); btn.textContent = '🔄 取得中...';
-  document.getElementById('newsContent').innerHTML = '<div class="news-loading">各国ニュースを検索・要約中です（数秒かかります）...</div>';
+  document.getElementById('newsContent').innerHTML = '<div class="news-loading">ニュースを取得・要約中です...</div>';
 
   const region = NEWS_REGIONS.find(r => r.key===newsRegion);
-  const prompt = 'あなたは世界の主要ニュースを日本語で届けるニュースエディターです。'
-    + 'Web検索を使って、以下の地域・クエリに関する最新ニュース（今日または直近）を調べてください。\n\n'
-    + '地域: ' + region.label + '\n'
-    + '検索クエリ: ' + region.query + '\n\n'
-    + '検索結果から重要なニュースを5〜8件選び、以下のJSON形式のみで返してください（前置き不要）:\n'
-    + '{"updated":"YYYY-MM-DD HH:MM","articles":[{"headline":"日本語見出し30字以内","summary":"日本語要約60〜80字","category":"経済・金融 または 不動産・REIT または マーケット または 政治・外交 または エネルギー または テック または その他","source":"メディア名","url":"記事URL（取得できた場合のみ）","time":"HH:MM"}]}'
-    + '\n重要：URLは確実に存在するものだけ。絶対に内容を捏造しないこと。';
+  const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const prompt = 'あなたは世界のニュースを日本語で伝えるエディターです。'
+    + '今日は' + today + 'です。'
+    + '【' + region.label + '】の直近の重要ニュースを5〜7件、以下のJSON配列のみで出力してください。'
+    + '前置き・説明文・コードブロック記号は一切不要です。必ずJSON配列のみ出力してください。\n'
+    + '[{"headline":"30字以内の日本語見出し","summary":"60〜80字の日本語要約","category":"経済・金融|不動産・REIT|マーケット|政治・外交|エネルギー|テック|その他のどれか1つ","source":"メディア名","time":"何時間前または今日"}]';
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -947,30 +946,23 @@ async function fetchNews(){
       headers: {'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        tools: [{type: 'web_search_20250305', name: 'web_search'}],
+        max_tokens: 1500,
         messages: [{role: 'user', content: prompt}]
       })
     });
     const data = await resp.json();
-    const text = data.content?.filter(b => b.type==='text').map(b => b.text).join('') || '';
-    try {
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      if(parsed.articles && parsed.articles.length > 0){
-        newsData[newsRegion] = parsed.articles;
-        const now = new Date().toLocaleString('ja-JP');
-        document.getElementById('newsUpd').textContent = `最終更新: ${now}`;
-        renderNewsContent();
-      } else {
-        document.getElementById('newsContent').innerHTML = '<div class="news-err">ニュースの取得に失敗しました。しばらく待ってから再試行してください。</div>';
-      }
-    } catch(e) {
-      // JSONパース失敗時はテキストをそのまま表示
-      document.getElementById('newsContent').innerHTML = `<div class="news-err">レスポンスの解析に失敗しました。<br><small>${text.slice(0,200)}</small></div>`;
-    }
+    // テキストブロックを全て結合
+    const text = (data.content || []).filter(b => b.type==='text').map(b => b.text).join('').trim();
+    // JSON配列を抽出（前後の余分なテキストを除去）
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if(!jsonMatch) throw new Error('JSON array not found in: ' + text.slice(0,100));
+    const articles = JSON.parse(jsonMatch[0]);
+    if(!Array.isArray(articles) || articles.length === 0) throw new Error('Empty articles');
+    newsData[newsRegion] = articles;
+    document.getElementById('newsUpd').textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
+    renderNewsContent();
   } catch(e) {
-    document.getElementById('newsContent').innerHTML = '<div class="news-err">通信エラーが発生しました。ネットワークを確認してください。</div>';
+    document.getElementById('newsContent').innerHTML = '<div class="news-err">取得に失敗しました: ' + e.message.slice(0,80) + '</div>';
   }
   newsFetching = false;
   btn.classList.remove('loading'); btn.textContent = '🔄 最新ニュース取得';
