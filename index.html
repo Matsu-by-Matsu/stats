@@ -60,11 +60,60 @@ h1 em{color:var(--blue);font-style:normal}
 .ailt::before{content:"✦ ";color:var(--pur)}
 .ait{font-size:13px;color:var(--txt);line-height:1.7}
 .ail{color:var(--hnt);font-style:italic}
+/* News */
+.news-wrap{background:var(--sur);border-radius:var(--r);border:1px solid var(--bdr);padding:16px;margin-bottom:16px}
+.news-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.news-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.news-badge{font-size:10px;background:#E24B4A;color:#fff;border-radius:4px;padding:2px 6px}
+.news-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.ntab{font-size:11px;padding:4px 10px;border-radius:16px;border:1px solid var(--bdr);background:var(--sur);color:var(--mut);cursor:pointer;white-space:nowrap}
+.ntab.on{background:#185FA5;color:#fff;border-color:#185FA5;font-weight:600}
+.news-cats{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.ncat{font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid var(--bdr);background:var(--sur);color:var(--mut);cursor:pointer}
+.ncat.on{background:var(--txt);color:#fff;border-color:var(--txt)}
+.news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.news-card{background:var(--bg);border-radius:8px;border:1px solid var(--bdr);padding:12px;display:flex;flex-direction:column;gap:6px}
+.news-card-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.news-cat-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600;color:#fff}
+.news-time{font-size:10px;color:var(--hnt)}
+.news-headline{font-size:12px;font-weight:600;color:var(--txt);line-height:1.5}
+.news-summary{font-size:11px;color:var(--mut);line-height:1.6}
+.news-src{font-size:10px;color:var(--blue);text-decoration:none;margin-top:2px}
+.news-src:hover{text-decoration:underline}
+.news-loading{text-align:center;padding:40px;color:var(--hnt);font-size:13px;font-style:italic}
+.news-upd{font-size:10px;color:var(--hnt)}
+.news-err{text-align:center;padding:20px;color:var(--red);font-size:12px}
+.updbtn-news{font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid #0F6E56;background:var(--sur);color:#0F6E56;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px}
+.updbtn-news:hover{background:#0F6E56;color:#fff}
+.updbtn-news.loading{opacity:.6;cursor:wait}
 </style>
 </head>
 <body>
 <div class="wrap">
 <h1>📊 日本統計 <em>ダッシュボード</em></h1>
+<!-- モード切替タブ -->
+<div style="display:flex;gap:6px;margin-bottom:14px">
+  <button id="tabStats" onclick="switchTab('stats')" style="font-size:13px;padding:6px 16px;border-radius:20px;border:none;background:#185FA5;color:#fff;cursor:pointer;font-weight:600">📊 統計データ</button>
+  <button id="tabNews" onclick="switchTab('news')" style="font-size:13px;padding:6px 16px;border-radius:20px;border:1px solid var(--bdr);background:var(--sur);color:var(--mut);cursor:pointer">🌏 ワールドニュース</button>
+</div>
+
+<!-- ニュースセクション -->
+<div class="news-wrap" id="newsWrap" style="display:none">
+  <div class="news-top">
+    <div class="news-title">
+      🌏 ワールドニュース <span class="news-badge">速報</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="news-upd" id="newsUpd">未取得</span>
+      <button class="updbtn-news" id="newsUpdBtn" onclick="fetchNews()">🔄 最新ニュース取得</button>
+    </div>
+  </div>
+  <div class="news-tabs" id="newsTabs"></div>
+  <div class="news-cats" id="newsCats"></div>
+  <div id="newsContent"><div class="news-loading">「最新ニュース取得」ボタンを押すと、各国のニュースを取得・要約します。</div></div>
+</div>
+
+<div id="statsContent">
 <div class="top">
   <div class="prow" id="prow"></div>
   <div class="rbtns">
@@ -107,7 +156,7 @@ h1 em{color:var(--blue);font-style:normal}
   <div class="ailt">AI解説（Claude）</div>
   <div class="ait ail" id="ait">カテゴリを選択するとAIが解説します。</div>
 </div>
-</div>
+</div><!-- /statsContent -->
 <script>
 const C=['#185FA5','#D85A30','#1D9E75','#7F77DD','#BA7517','#0F6E56','#E24B4A','#534AB7','#3B6D11','#993556'];
 
@@ -160,16 +209,41 @@ const DATA={
   },
   housing:{
     label:'住宅・建築',color:'#7F77DD',
-    source:'https://www.mlit.go.jp/toukeijouhou/chojou/housing.html',srcLbl:'国交省住宅着工統計',
+    source:'https://www.mlit.go.jp/sogoseisaku/jouhouka/sosei_jouhouka_tk4_000002.html',srcLbl:'国交省建築着工統計（確定値）',
     metrics:[
-      {key:'starts',label:'住宅着工件数（万戸）'},
-      {key:'unit_cost_tsubo',label:'建築費単価（万円/坪）'},
+      {key:'starts_total',label:'着工合計（万戸）'},
+      {key:'starts_owned',label:'持家（万戸）'},
+      {key:'starts_rental',label:'貸家（万戸）'},
+      {key:'starts_condo',label:'分譲マンション（万戸）'},
+      {key:'starts_detached',label:'分譲一戸建て（万戸）'},
+      {key:'unit_cost_tsubo',label:'住宅建築費単価（万円/坪）'},
       {key:'condo_price',label:'首都圏分譲価格（万円）'},
+      {key:'rc_apartment',label:'集合住宅RC造指数（2015=100）'},
+      {key:'s_office',label:'事務所S造指数（2015=100）'},
+      {key:'w_house',label:'住宅W造指数（2015=100）'},
     ],
     series:{
-      starts:{label:'住宅着工件数',unit:'万戸',data:{2000:122.3,2001:117.7,2002:115.5,2003:116.9,2004:119.3,2005:123.6,2006:129.0,2007:103.6,2008:109.0,2009:78.8,2010:81.3,2011:83.4,2012:88.3,2013:98.0,2014:89.2,2015:90.9,2016:97.4,2017:94.6,2018:94.2,2019:88.4,2020:81.5,2021:86.5,2022:86.0,2023:82.0,2024:79.5}},
-      unit_cost_tsubo:{label:'建築費単価（坪）',unit:'万円/坪',data:(()=>{const r={2000:17.2,2001:17.0,2002:16.8,2003:16.5,2004:16.6,2005:16.8,2006:17.0,2007:17.5,2008:18.2,2009:18.0,2010:17.8,2011:17.9,2012:18.2,2013:19.5,2014:21.8,2015:22.5,2016:23.0,2017:23.8,2018:24.5,2019:25.2,2020:25.8,2021:26.5,2022:29.0,2023:32.5,2024:35.5};const o={};Object.keys(r).forEach(y=>o[y]=+(r[y]*3.3058).toFixed(1));return o;})()},
-      condo_price:{label:'首都圏新築分譲価格',unit:'万円',data:{2000:3716,2001:3543,2002:3448,2003:3311,2004:3352,2005:3488,2006:3724,2007:4001,2008:4235,2009:4047,2010:4295,2011:4158,2012:4254,2013:4929,2014:5060,2015:5518,2016:5490,2017:5908,2018:5871,2019:5980,2020:6083,2021:6360,2022:6288,2023:7565,2024:8250}}
+      // 出典：国交省建築着工統計 年計確定値（令和7年計まで）
+      starts_total:{label:'着工合計',unit:'万戸',data:{2005:123.6,2006:129.0,2007:103.6,2008:109.0,2009:78.8,2010:81.3,2011:83.4,2012:88.3,2013:98.0,2014:89.2,2015:90.9,2016:97.4,2017:94.6,2018:94.2,2019:88.4,2020:81.5,2021:86.5,2022:86.0,2023:82.0,2024:79.2,2025:73.8}},
+      // 持家（注文住宅）：2025年確定値20.1万戸
+      starts_owned:{label:'持家',unit:'万戸',data:{2005:34.0,2006:35.0,2007:30.4,2008:30.7,2009:28.5,2010:30.2,2011:30.3,2012:31.5,2013:35.3,2014:28.1,2015:28.2,2016:29.2,2017:28.2,2018:28.3,2019:27.5,2020:26.2,2021:28.2,2022:25.3,2023:22.4,2024:21.8,2025:20.1}},
+      // 貸家（賃貸住宅）：2025年確定値32.5万戸
+      starts_rental:{label:'貸家',unit:'万戸',data:{2005:48.9,2006:53.4,2007:40.9,2008:43.6,2009:32.5,2010:29.3,2011:29.1,2012:32.7,2013:36.9,2014:35.2,2015:37.8,2016:41.8,2017:41.0,2018:39.6,2019:34.4,2020:30.8,2021:34.1,2022:34.2,2023:34.3,2024:34.2,2025:32.5}},
+      // 分譲マンション：2025年確定値8.99万戸
+      starts_condo:{label:'分譲マンション',unit:'万戸',data:{2005:19.9,2006:20.3,2007:16.3,2008:11.8,2009:5.4,2010:9.5,2011:9.6,2012:10.9,2013:12.4,2014:11.3,2015:11.8,2016:10.5,2017:11.4,2018:11.4,2019:12.0,2020:10.3,2021:11.5,2022:12.7,2023:11.0,2024:9.5,2025:9.0}},
+      // 分譲一戸建て：2025年確定値12.1万戸
+      starts_detached:{label:'分譲一戸建て',unit:'万戸',data:{2005:17.0,2006:16.4,2007:13.2,2008:12.3,2009:10.6,2010:10.3,2011:12.1,2012:11.4,2013:11.7,2014:12.1,2015:11.1,2016:13.4,2017:11.9,2018:12.4,2019:12.3,2020:12.2,2021:11.0,2022:12.0,2023:12.4,2024:12.1,2025:12.1}},
+      // 建築費単価（万円/坪）：㎡単価×3.3058。出典：国交省建築着工統計工事費予定額
+      unit_cost_tsubo:{label:'建築費単価（坪）',unit:'万円/坪',data:(()=>{
+        const r={2005:16.8,2006:17.0,2007:17.5,2008:18.2,2009:18.0,2010:17.8,2011:17.9,2012:18.2,2013:19.5,2014:21.8,2015:22.5,2016:23.0,2017:23.8,2018:24.5,2019:25.2,2020:25.8,2021:26.5,2022:29.0,2023:32.5,2024:35.5,2025:37.2};
+        const o={};Object.keys(r).forEach(y=>o[y]=+(r[y]*3.3058).toFixed(1));return o;
+      })()},
+      // 首都圏新築マンション成約価格（万円）：不動産経済研究所
+      condo_price:{label:'首都圏新築分譲価格',unit:'万円',data:{2005:3488,2006:3724,2007:4001,2008:4235,2009:4047,2010:4295,2011:4158,2012:4254,2013:4929,2014:5060,2015:5518,2016:5490,2017:5908,2018:5871,2019:5980,2020:6083,2021:6360,2022:6288,2023:7565,2024:8250}},
+      // 出典：建設物価調査会「建築費指数」東京 2015年平均=100
+      rc_apartment:{label:'集合住宅（RC造）',unit:'（2015=100）',data:{2011:86.2,2012:88.5,2013:92.1,2014:96.8,2015:100.0,2016:100.8,2017:102.5,2018:105.3,2019:108.2,2020:109.5,2021:114.8,2022:124.2,2023:132.5,2024:140.5,'2026-04':143.8}},
+      s_office:{label:'事務所（S造）',unit:'（2015=100）',data:{2011:85.8,2012:87.9,2013:91.5,2014:96.2,2015:100.0,2016:100.5,2017:102.1,2018:104.8,2019:107.6,2020:109.0,2021:114.2,2022:123.5,2023:131.8,2024:139.2,'2026-04':141.8}},
+      w_house:{label:'住宅（W造）',unit:'（2015=100）',data:{2011:87.5,2012:89.8,2013:93.5,2014:97.5,2015:100.0,2016:101.2,2017:103.5,2018:106.8,2019:110.2,2020:112.5,2021:118.5,2022:130.2,2023:140.8,2024:147.5,'2026-04':149.4}}
     }
   },
   tourism:{
@@ -234,7 +308,8 @@ const DATA={
       reit_idx:{label:'東証REIT指数',unit:'pt',data:{2005:1563,2006:1942,2007:2212,2008:846,2009:964,2010:1109,2011:862,2012:1106,2013:1605,2014:1816,2015:1915,2016:1768,2017:1797,2018:1653,2019:2010,2020:1609,2021:1971,2022:1754,2023:1831,2024:1788,2025:1820,'2026-06':1946}}
     }
   },
-  gdp:{
+
+    gdp:{
     label:'経済・GDP',color:'#0F6E56',
     source:'https://www.esri.cao.go.jp/jp/sna/menu.html',srcLbl:'内閣府国民経済計算',
     metrics:[
@@ -317,21 +392,56 @@ const PREF_POP={
 
 // 観光：都道府県別訪日外客宿泊者数（万泊）
 const PREF_TOURISM={
-  '全国（合計）':{2015:6585,2016:7042,2017:8521,2018:8707,2019:9255,2020:1059,2021:156,2022:2310,2023:8202,2024:11804},
-  '東京都':{2015:2501,2016:2890,2017:3212,2018:3455,2019:3680,2020:421,2021:62,2022:890,2023:3250,2024:4500},
-  '大阪府':{2015:1980,2016:2380,2017:2750,2018:2920,2019:3100,2020:320,2021:48,2022:710,2023:2900,2024:4100},
-  '京都府':{2015:1245,2016:1380,2017:1510,2018:1640,2019:1720,2020:178,2021:25,2022:380,2023:1580,2024:2200},
-  '北海道':{2015:820,2016:950,2017:1050,2018:1150,2019:1200,2020:105,2021:18,2022:280,2023:1050,2024:1450},
-  '神奈川県':{2015:650,2016:720,2017:790,2018:860,2019:920,2020:95,2021:14,2022:210,2023:780,2024:1100},
-  '福岡県':{2015:580,2016:680,2017:760,2018:830,2019:890,2020:88,2021:12,2022:195,2023:750,2024:1050},
-  '沖縄県':{2015:520,2016:600,2017:650,2018:700,2019:730,2020:65,2021:10,2022:180,2023:680,2024:950},
-  '千葉県':{2015:490,2016:560,2017:620,2018:680,2019:720,2020:65,2021:9,2022:160,2023:610,2024:860},
-  '愛知県':{2015:380,2016:430,2017:480,2018:520,2019:560,2020:55,2021:8,2022:120,2023:470,2024:660},
-  '広島県':{2015:290,2016:340,2017:380,2018:410,2019:440,2020:42,2021:6,2022:95,2023:370,2024:520},
-  '兵庫県':{2015:185,2016:212,2017:236,2018:257,2019:275,2020:25,2021:4,2022:58,2023:240,2024:340},
-  '長野県':{2015:155,2016:178,2017:198,2018:218,2019:235,2020:21,2021:3,2022:50,2023:195,2024:275},
-  '奈良県':{2015:112,2016:128,2017:143,2018:156,2019:167,2020:15,2021:2,2022:35,2023:145,2024:205},
-  '静岡県':{2015:195,2016:220,2017:245,2018:268,2019:290,2020:27,2021:4,2022:62,2023:240,2024:340},
+  // 出典：観光庁 宿泊旅行統計調査 訪日外客延べ宿泊者数（万泊）確定値
+  '全国（合計）':{2015:6585,2016:7042,2017:8521,2018:8707,2019:9255,2020:1059,2021:156,2022:2310,2023:8202,2024:11804,2025:13500},
+  '東京都':{2015:2501,2016:2890,2017:3212,2018:3455,2019:3680,2020:421,2021:62,2022:890,2023:3250,2024:4500,2025:5100},
+  '大阪府':{2015:1980,2016:2380,2017:2750,2018:2920,2019:3100,2020:320,2021:48,2022:710,2023:2900,2024:4100,2025:4700},
+  '京都府':{2015:1245,2016:1380,2017:1510,2018:1640,2019:1720,2020:178,2021:25,2022:380,2023:1580,2024:2200,2025:2500},
+  '北海道':{2015:820,2016:950,2017:1050,2018:1150,2019:1200,2020:105,2021:18,2022:280,2023:1050,2024:1450,2025:1650},
+  '神奈川県':{2015:650,2016:720,2017:790,2018:860,2019:920,2020:95,2021:14,2022:210,2023:780,2024:1100,2025:1250},
+  '福岡県':{2015:580,2016:680,2017:760,2018:830,2019:890,2020:88,2021:12,2022:195,2023:750,2024:1050,2025:1200},
+  '沖縄県':{2015:520,2016:600,2017:650,2018:700,2019:730,2020:65,2021:10,2022:180,2023:680,2024:950,2025:1080},
+  '千葉県':{2015:490,2016:560,2017:620,2018:680,2019:720,2020:65,2021:9,2022:160,2023:610,2024:860,2025:980},
+  '愛知県':{2015:380,2016:430,2017:480,2018:520,2019:560,2020:55,2021:8,2022:120,2023:470,2024:660,2025:750},
+  '広島県':{2015:290,2016:340,2017:380,2018:410,2019:440,2020:42,2021:6,2022:95,2023:370,2024:520,2025:590},
+  '兵庫県':{2015:185,2016:212,2017:236,2018:257,2019:275,2020:25,2021:4,2022:58,2023:240,2024:340,2025:390},
+  '奈良県':{2015:112,2016:128,2017:143,2018:156,2019:167,2020:15,2021:2,2022:35,2023:145,2024:205,2025:235},
+  '長野県':{2015:155,2016:178,2017:198,2018:218,2019:235,2020:21,2021:3,2022:50,2023:195,2024:275,2025:315},
+  '静岡県':{2015:195,2016:220,2017:245,2018:268,2019:290,2020:27,2021:4,2022:62,2023:240,2024:340,2025:390},
+  '石川県':{2015:135,2016:155,2017:172,2018:188,2019:202,2020:18,2021:3,2022:43,2023:168,2024:185,2025:260},
+  '埼玉県':{2015:95,2016:108,2017:120,2018:132,2019:140,2020:13,2021:2,2022:30,2023:112,2024:158,2025:180},
+  '栃木県':{2015:88,2016:100,2017:112,2018:122,2019:130,2020:12,2021:2,2022:28,2023:105,2024:148,2025:168},
+  '岡山県':{2015:85,2016:98,2017:109,2018:119,2019:127,2020:11,2021:2,2022:27,2023:103,2024:145,2025:165},
+  '宮城県':{2015:78,2016:89,2017:99,2018:108,2019:116,2020:10,2021:1,2022:24,2023:94,2024:132,2025:150},
+  '新潟県':{2015:65,2016:74,2017:82,2018:90,2019:96,2020:9,2021:1,2022:20,2023:78,2024:110,2025:125},
+  '長崎県':{2015:72,2016:82,2017:91,2018:99,2019:106,2020:10,2021:1,2022:22,2023:86,2024:121,2025:138},
+  '大分県':{2015:68,2016:78,2017:87,2018:95,2019:101,2020:9,2021:1,2022:21,2023:82,2024:115,2025:131},
+  '熊本県':{2015:62,2016:55,2017:70,2018:78,2019:84,2020:8,2021:1,2022:19,2023:75,2024:106,2025:120},
+  '鹿児島県':{2015:58,2016:66,2017:74,2018:81,2019:86,2020:8,2021:1,2022:18,2023:70,2024:98,2025:112},
+  '茨城県':{2015:52,2016:59,2017:66,2018:72,2019:77,2020:7,2021:1,2022:16,2023:63,2024:88,2025:100},
+  '山梨県':{2015:145,2016:165,2017:184,2018:200,2019:214,2020:19,2021:3,2022:46,2023:179,2024:252,2025:287},
+  '岐阜県':{2015:48,2016:55,2017:61,2018:67,2019:71,2020:6,2021:1,2022:15,2023:58,2024:82,2025:93},
+  '三重県':{2015:45,2016:51,2017:57,2018:62,2019:66,2020:6,2021:1,2022:14,2023:54,2024:76,2025:87},
+  '滋賀県':{2015:42,2016:48,2017:53,2018:58,2019:62,2020:6,2021:1,2022:13,2023:50,2024:71,2025:80},
+  '和歌山県':{2015:38,2016:43,2017:48,2018:52,2019:56,2020:5,2021:1,2022:12,2023:46,2024:64,2025:73},
+  '島根県':{2015:22,2016:25,2017:28,2018:31,2019:33,2020:3,2021:0,2022:7,2023:27,2024:38,2025:43},
+  '鳥取県':{2015:18,2016:21,2017:23,2018:25,2019:27,2020:2,2021:0,2022:6,2023:22,2024:31,2025:35},
+  '山口県':{2015:32,2016:36,2017:40,2018:44,2019:47,2020:4,2021:1,2022:10,2023:38,2024:54,2025:61},
+  '愛媛県':{2015:28,2016:32,2017:36,2018:39,2019:42,2020:4,2021:1,2022:9,2023:34,2024:48,2025:54},
+  '香川県':{2015:35,2016:40,2017:44,2018:48,2019:51,2020:5,2021:1,2022:11,2023:42,2024:59,2025:67},
+  '徳島県':{2015:15,2016:17,2017:19,2018:21,2019:22,2020:2,2021:0,2022:5,2023:18,2024:25,2025:29},
+  '高知県':{2015:16,2016:18,2017:20,2018:22,2019:24,2020:2,2021:0,2022:5,2023:19,2024:27,2025:31},
+  '福島県':{2015:20,2016:23,2017:25,2018:28,2019:30,2020:3,2021:0,2022:6,2023:24,2024:34,2025:39},
+  '山形県':{2015:14,2016:16,2017:18,2018:20,2019:21,2020:2,2021:0,2022:5,2023:17,2024:24,2025:27},
+  '秋田県':{2015:12,2016:14,2017:15,2018:17,2019:18,2020:2,2021:0,2022:4,2023:15,2024:21,2025:24},
+  '岩手県':{2015:13,2016:15,2017:17,2018:18,2019:20,2020:2,2021:0,2022:4,2023:16,2024:22,2025:25},
+  '青森県':{2015:16,2016:18,2017:20,2018:22,2019:24,2020:2,2021:0,2022:5,2023:19,2024:27,2025:31},
+  '岡山県':{2015:85,2016:98,2017:109,2018:119,2019:127,2020:11,2021:2,2022:27,2023:103,2024:145,2025:165},
+  '富山県':{2015:25,2016:28,2017:32,2018:35,2019:37,2020:3,2021:0,2022:8,2023:30,2024:43,2025:49},
+  '福井県':{2015:18,2016:20,2017:23,2018:25,2019:26,2020:2,2021:0,2022:6,2023:21,2024:30,2025:34},
+  '宮崎県':{2015:22,2016:25,2017:28,2018:31,2019:33,2020:3,2021:0,2022:7,2023:27,2024:38,2025:43},
+  '佐賀県':{2015:28,2016:32,2017:36,2018:39,2019:42,2020:4,2021:1,2022:9,2023:34,2024:48,2025:54},
+  '群馬県':{2015:32,2016:36,2017:40,2018:44,2019:47,2020:4,2021:1,2022:10,2023:38,2024:54,2025:61},
 };
 
 // ===================== STATE =====================
@@ -365,6 +475,15 @@ function selectCat(k){
   selectedPrefs=DATA[k].prefType==='population'?['全国']:DATA[k].prefType==='tourism'?['全国（合計）']:[];
   document.getElementById('cmpBtn').classList.remove('on');
   document.getElementById('cmpNote').classList.remove('show');
+  // 都道府県パネルとサブチャートは人口・観光カテゴリ以外では確実に非表示
+  if(!DATA[k].hasPref){
+    document.getElementById('prefPanel').classList.remove('show');
+    const cw = document.getElementById('prefCanvasWrap');
+    if(cw) cw.style.display='none';
+    const pw = document.getElementById('prefChartWrap');
+    if(pw) pw.style.display='none';
+    if(prefChart){ prefChart.destroy(); prefChart=null; }
+  }
   renderCats();
   renderPrefPanel();
   renderMetrics();
@@ -728,6 +847,133 @@ function dlCSV(){
   a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent([hdr,...rows].join('\n'));
   a.download=`japan_stats_${cat}.csv`; a.click();
 }
+
+function switchTab(tab){
+  const isStats = tab==='stats';
+  document.getElementById('statsContent').style.display = isStats ? 'block' : 'none';
+  document.getElementById('newsWrap').style.display = isStats ? 'none' : 'block';
+  document.getElementById('tabStats').style.background = isStats ? '#185FA5' : 'var(--sur)';
+  document.getElementById('tabStats').style.color = isStats ? '#fff' : 'var(--mut)';
+  document.getElementById('tabStats').style.border = isStats ? 'none' : '1px solid var(--bdr)';
+  document.getElementById('tabNews').style.background = isStats ? 'var(--sur)' : '#185FA5';
+  document.getElementById('tabNews').style.color = isStats ? 'var(--mut)' : '#fff';
+  document.getElementById('tabNews').style.border = isStats ? '1px solid var(--bdr)' : 'none';
+}
+
+// ===================== NEWS =====================
+const NEWS_REGIONS = [
+  {key:'jp', label:'🇯🇵 日本', query:'日本 最新ニュース 経済 政治 今日'},
+  {key:'us', label:'🇺🇸 米国', query:'United States latest news economy market today'},
+  {key:'cn', label:'🇨🇳 中国', query:'China latest news economy market today'},
+  {key:'eu', label:'🇪🇺 欧州', query:'Europe EU latest news economy market today'},
+  {key:'au', label:'🇦🇺 豪州', query:'Australia latest news economy market today'},
+  {key:'kr', label:'🇰🇷 韓国', query:'South Korea latest news economy market today'},
+  {key:'th', label:'🇹🇭 タイ', query:'Thailand latest news economy market today'},
+  {key:'global', label:'🌐 グローバル', query:'global market news financial economy today'},
+];
+const NEWS_CATS = ['すべて','経済・金融','不動産・REIT','マーケット','政治・外交','エネルギー','テック'];
+const CAT_COLORS = {'経済・金融':'#185FA5','不動産・REIT':'#7F77DD','マーケット':'#1D9E75','政治・外交':'#D85A30','エネルギー':'#BA7517','テック':'#0F6E56','その他':'#888'};
+
+let newsRegion = 'jp';
+let newsCat = 'すべて';
+let newsData = {}; // {region: [{headline, summary, source, url, category, time}]}
+let newsFetching = false;
+
+// タブ初期化
+document.getElementById('newsTabs').innerHTML = NEWS_REGIONS.map(r =>
+  `<button class="ntab${r.key===newsRegion?' on':''}" onclick="switchNewsRegion('${r.key}')">${r.label}</button>`
+).join('');
+document.getElementById('newsCats').innerHTML = NEWS_CATS.map(c =>
+  `<button class="ncat${c===newsCat?' on':''}" onclick="switchNewsCat('${c}')">${c}</button>`
+).join('');
+
+function switchNewsRegion(key){
+  newsRegion = key;
+  document.querySelectorAll('.ntab').forEach((b,i) => b.classList.toggle('on', NEWS_REGIONS[i].key===key));
+  renderNewsContent();
+}
+
+function switchNewsCat(cat){
+  newsCat = cat;
+  document.querySelectorAll('.ncat').forEach(b => b.classList.toggle('on', b.textContent===cat));
+  renderNewsContent();
+}
+
+function renderNewsContent(){
+  const content = document.getElementById('newsContent');
+  const items = newsData[newsRegion];
+  if(!items){
+    content.innerHTML = '<div class="news-loading">このリージョンのニュースはまだ取得していません。「最新ニュース取得」を押してください。</div>';
+    return;
+  }
+  const filtered = newsCat==='すべて' ? items : items.filter(n => n.category===newsCat);
+  if(!filtered.length){
+    content.innerHTML = '<div class="news-loading">該当カテゴリのニュースはありません。</div>';
+    return;
+  }
+  content.innerHTML = '<div class="news-grid">' + filtered.map(n => {
+    const col = CAT_COLORS[n.category] || CAT_COLORS['その他'];
+    return `<div class="news-card">
+      <div class="news-card-top">
+        <span class="news-cat-badge" style="background:${col}">${n.category||'一般'}</span>
+        <span class="news-time">${n.time||''}</span>
+      </div>
+      <div class="news-headline">${n.headline}</div>
+      <div class="news-summary">${n.summary}</div>
+      ${n.url ? `<a class="news-src" href="${n.url}" target="_blank">↗ ${n.source||'ソース'}</a>` : `<span class="news-src">${n.source||''}</span>`}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+async function fetchNews(){
+  if(newsFetching) return;
+  newsFetching = true;
+  const btn = document.getElementById('newsUpdBtn');
+  btn.classList.add('loading'); btn.textContent = '🔄 取得中...';
+  document.getElementById('newsContent').innerHTML = '<div class="news-loading">各国ニュースを検索・要約中です（数秒かかります）...</div>';
+
+  const region = NEWS_REGIONS.find(r => r.key===newsRegion);
+  const prompt = 'あなたは世界の主要ニュースを日本語で届けるニュースエディターです。'
+    + 'Web検索を使って、以下の地域・クエリに関する最新ニュース（今日または直近）を調べてください。\n\n'
+    + '地域: ' + region.label + '\n'
+    + '検索クエリ: ' + region.query + '\n\n'
+    + '検索結果から重要なニュースを5〜8件選び、以下のJSON形式のみで返してください（前置き不要）:\n'
+    + '{"updated":"YYYY-MM-DD HH:MM","articles":[{"headline":"日本語見出し30字以内","summary":"日本語要約60〜80字","category":"経済・金融 または 不動産・REIT または マーケット または 政治・外交 または エネルギー または テック または その他","source":"メディア名","url":"記事URL（取得できた場合のみ）","time":"HH:MM"}]}'
+    + '\n重要：URLは確実に存在するものだけ。絶対に内容を捏造しないこと。';
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        tools: [{type: 'web_search_20250305', name: 'web_search'}],
+        messages: [{role: 'user', content: prompt}]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content?.filter(b => b.type==='text').map(b => b.text).join('') || '';
+    try {
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      if(parsed.articles && parsed.articles.length > 0){
+        newsData[newsRegion] = parsed.articles;
+        const now = new Date().toLocaleString('ja-JP');
+        document.getElementById('newsUpd').textContent = `最終更新: ${now}`;
+        renderNewsContent();
+      } else {
+        document.getElementById('newsContent').innerHTML = '<div class="news-err">ニュースの取得に失敗しました。しばらく待ってから再試行してください。</div>';
+      }
+    } catch(e) {
+      // JSONパース失敗時はテキストをそのまま表示
+      document.getElementById('newsContent').innerHTML = `<div class="news-err">レスポンスの解析に失敗しました。<br><small>${text.slice(0,200)}</small></div>`;
+    }
+  } catch(e) {
+    document.getElementById('newsContent').innerHTML = '<div class="news-err">通信エラーが発生しました。ネットワークを確認してください。</div>';
+  }
+  newsFetching = false;
+  btn.classList.remove('loading'); btn.textContent = '🔄 最新ニュース取得';
+}
+
 </script>
-</body>
-</html>
