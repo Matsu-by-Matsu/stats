@@ -937,16 +937,22 @@ function renderNewsContent(){
     content.innerHTML = '<div class="news-loading">該当カテゴリのニュースはありません。</div>';
     return;
   }
+  const esc = function(value){
+    return String(value || '').replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  };
   content.innerHTML = '<div class="news-grid">' + filtered.map(n => {
     const col = CAT_COLORS[n.category] || CAT_COLORS['その他'];
+    const safeUrl = /^https?:\/\//.test(n.url || '') ? n.url : '';
     return `<div class="news-card">
       <div class="news-card-top">
-        <span class="news-cat-badge" style="background:${col}">${n.category||'一般'}</span>
-        <span class="news-time">${n.time||''}</span>
+        <span class="news-cat-badge" style="background:${col}">${esc(n.category||'一般')}</span>
+        <span class="news-time">${esc(n.time||'')}</span>
       </div>
-      <div class="news-headline">${n.headline}</div>
-      <div class="news-summary">${n.summary}</div>
-      ${n.url ? `<a class="news-src" href="${n.url}" target="_blank">↗ ${n.source||'ソース'}</a>` : `<span class="news-src">${n.source||''}</span>`}
+      <div class="news-headline">${esc(n.headline)}</div>
+      <div class="news-summary">${esc(n.summary)}</div>
+      ${safeUrl ? `<a class="news-src" href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer">↗ ${esc(n.source||'ソース')}</a>` : `<span class="news-src">${esc(n.source||'')}</span>`}
     </div>`;
   }).join('') + '</div>';
 }
@@ -959,14 +965,21 @@ async function fetchNews(){
   btn.textContent = '取得中...';
   document.getElementById('newsContent').innerHTML = '<div class="news-loading">ニュースを取得中...</div>';
   var region = NEWS_REGIONS.find(function(r){ return r.key===newsRegion; });
+  if(!region){
+    document.getElementById('newsContent').innerHTML = '<div class="news-err">ニュース地域が見つかりません</div>';
+    newsFetching = false;
+    btn.classList.remove('loading');
+    btn.textContent = '最新ニュース取得';
+    return;
+  }
   var feeds = region.feeds;
-  var done = 0;
   var allArticles = [];
 
   function parseRSSXML(xmlText, feedName, category){
     try {
       var parser = new DOMParser();
       var doc = parser.parseFromString(xmlText, 'text/xml');
+      if(doc.querySelector('parsererror')) throw new Error('Invalid XML');
       var items = doc.querySelectorAll('item');
       var results = [];
       items.forEach(function(item){
@@ -977,8 +990,13 @@ async function fetchNews(){
         var titleText = title ? (title.textContent || '') : '';
         var descText = desc ? (desc.textContent || '').replace(/<[^>]*>/g,'').trim() : '';
         var timeText = '';
+        var timestamp = 0;
         if(pubDate && pubDate.textContent){
-          try { timeText = new Date(pubDate.textContent).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){}
+          try {
+            var dt = new Date(pubDate.textContent);
+            timestamp = dt.getTime() || 0;
+            timeText = dt.toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          } catch(e){}
         }
         if(titleText){
           results.push({
@@ -987,7 +1005,8 @@ async function fetchNews(){
             category: category || 'その他',
             source: feedName,
             url: link ? (link.textContent || link.getAttribute('href') || '') : '',
-            time: timeText
+            time: timeText,
+            timestamp: timestamp
           });
         }
       });
@@ -998,11 +1017,72 @@ async function fetchNews(){
     }
   }
 
+  function fetchWithTimeout(url, timeoutMs){
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
+    return fetch(url, {signal: controller.signal, cache: 'no-store'})
+      .finally(function(){ clearTimeout(timer); });
+  }
+
+  function buildProxyUrls(feedUrl){
+    return [
+      'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl),
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(feedUrl),
+      'https://api.codetabs.com/v1/proxy?quest=' + feedUrl
+    ];
+  }
+
+  function parseRSSJSON(jsonText, feedName, category){
+    try {
+      var data = JSON.parse(jsonText);
+      if(data.status !== 'ok' || !Array.isArray(data.items)) return [];
+      return data.items.map(function(item){
+        var dt = item.pubDate ? new Date(item.pubDate) : null;
+        var timestamp = dt ? (dt.getTime() || 0) : 0;
+        var timeText = dt ? dt.toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        var descText = (item.description || item.content || '').replace(/<[^>]*>/g,'').trim();
+        return {
+          headline: (item.title || '').slice(0,60),
+          summary: descText.slice(0,150),
+          category: category || 'その他',
+          source: feedName,
+          url: item.link || '',
+          time: timeText,
+          timestamp: timestamp
+        };
+      }).filter(function(item){ return item.headline; });
+    } catch(e) {
+      return [];
+    }
+  }
+
+  async function fetchFeed(feed){
+    var urls = buildProxyUrls(feed.url);
+    var lastErr = null;
+    for(var i = 0; i < urls.length; i++){
+      try {
+        var r = await fetchWithTimeout(urls[i], 10000);
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        var text = await r.text();
+        var items = urls[i].indexOf('rss2json.com') !== -1
+          ? parseRSSJSON(text, feed.name, feed.category)
+          : parseRSSXML(text, feed.name, feed.category);
+        if(items.length) return items;
+        throw new Error('RSS items not found');
+      } catch(e) {
+        lastErr = e;
+      }
+    }
+    console.warn(feed.name, lastErr ? lastErr.message : '取得失敗');
+    return [];
+  }
+
   function finish(){
     var articles = allArticles.filter(function(a){ return a.headline; });
     if(articles.length === 0){
-      document.getElementById('newsContent').innerHTML = '<div class="news-err">記事を取得できませんでした</div>';
+      document.getElementById('newsContent').innerHTML = '<div class="news-err">記事を取得できませんでした。時間をおいて再実行してください。</div>';
     } else {
+      articles.sort(function(a,b){ return (b.timestamp || 0) - (a.timestamp || 0); });
       newsData[newsRegion] = articles;
       document.getElementById('newsUpd').textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
       renderNewsContent();
@@ -1012,24 +1092,13 @@ async function fetchNews(){
     btn.textContent = '最新ニュース取得';
   }
 
-  // allorigins.win経由でGoogle News RSSをXML取得
-  feeds.forEach(function(feed){
-    var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(feed.url);
-    fetch(proxyUrl)
-      .then(function(r){
-        if(!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
-      .then(function(text){
-        var items = parseRSSXML(text, feed.name, feed.category);
-        items.forEach(function(i){ allArticles.push(i); });
-      })
-      .catch(function(e){ console.warn(feed.name, e.message); })
-      .finally(function(){
-        done++;
-        if(done === feeds.length) finish();
-      });
-  });
+  Promise.all(feeds.map(fetchFeed)).then(function(results){
+    results.forEach(function(items){
+      items.forEach(function(i){ allArticles.push(i); });
+    });
+  }).catch(function(e){
+    console.warn('ニュース取得エラー:', e);
+  }).finally(finish);
 }
 
 </script>
