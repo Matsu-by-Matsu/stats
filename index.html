@@ -778,7 +778,7 @@ async function fetchLatest(){
 
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',max_tokens:600,
         tools:[{type:'web_search_20250305',name:'web_search'}],
@@ -825,7 +825,7 @@ async function renderAI(){
   const s=d.series[k];
   const vals=Object.entries(s.data).slice(-5).map(([y,v])=>`${y}年:${v}`).join(', ');
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
         messages:[{role:'user',content:`日本統計の専門家として、以下データのトレンドと注目ポイントを120文字程度で日本語解説（箇条書き不要、2〜3文）。\nカテゴリ:${d.label} 指標:${s.label}（${s.unit}）\n最近データ: ${vals}`}]})
     });
@@ -944,7 +944,7 @@ async function fetchNews(){
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2000,
