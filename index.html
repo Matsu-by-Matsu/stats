@@ -394,9 +394,1281 @@ h1 em{color:var(--blue);font-style:normal}
       <div class="money-title">💰 世界のお金の全体像</div>
       <div class="money-note">世界の資金ストック、保有者、投資market内訳、ドラッグ式の資金フローシミュレーターを表示します。統計というより、複数ソースを組み合わせた推定・概念モデルとして扱ってください。</div>
     </div>
-    <a class="src" href="../../世界のお金の全体像/by Claude/world_money_overview_v3.html" target="_blank">↗ 別タブで開く</a>
+    <a class="src" href="#" onclick="openMoneyStandalone();return false;">↗ 別タブで開く</a>
   </div>
-  <iframe class="money-frame" title="世界のお金の全体像" src="../../世界のお金の全体像/by Claude/world_money_overview_v3.html"></iframe>
+  <iframe class="money-frame" title="世界のお金の全体像" srcdoc="&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;ja&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+&lt;title&gt;世界のお金の全体像&lt;/title&gt;
+&lt;style&gt;
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&amp;family=Noto+Sans+JP:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap');
+
+  :root {
+    --paper: #f7f4ee;
+    --ink: #1f2421;
+    --sub: #65645c;
+    --line: #d8d4c6;
+    --bank: #8a9a8c;
+    --bank-deep: #6b7c6e;
+    --market: #c1532f;
+    --gold: #b8923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Zen Old Mincho', serif;
+    --sans: 'Noto Sans JP', sans-serif;
+  }
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    padding: 40px 32px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 36px;
+  }
+  .masthead h1 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .masthead .rate {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sub);
+  }
+
+  .block { margin-bottom: 44px; }
+  .block-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--sub);
+    margin-bottom: 4px;
+  }
+  .block-title {
+    font-family: var(--serif);
+    font-size: 19px;
+    margin-bottom: 18px;
+  }
+
+  .split-bar {
+    display: flex;
+    width: 100%;
+    height: 88px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1.5px solid var(--ink);
+  }
+  .split-seg {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 22px;
+    color: #fff;
+    position: relative;
+  }
+  .split-seg.bank { background: var(--bank); flex: 28; }
+  .split-seg.market { background: var(--market); flex: 72; }
+  .split-seg .seg-label { font-size: 13px; font-weight: 500; opacity: 0.92; margin-bottom: 4px; }
+  .split-seg .seg-value { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  .split-seg .seg-jpy { font-family: var(--mono); font-size: 11px; opacity: 0.85; margin-top: 2px; }
+  .split-seg .seg-pct {
+    position: absolute; top: 10px; right: 16px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600; opacity: 0.85;
+  }
+
+  .total-readout {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 16px 18px;
+    background: #fffaf0;
+    border: 1.5px solid #c7a85a;
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(90,70,30,0.08);
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--sub);
+  }
+  .total-readout .total-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #8b6a1f;
+  }
+  .total-readout strong {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .flow-arrow {
+    display: flex; align-items: center; margin: 22px 0; padding-left: 72%;
+  }
+  .flow-arrow-line { flex: 1; height: 1.5px; background: var(--line); position: relative; }
+  .flow-arrow-line::after {
+    content: ''; position: absolute; right: -2px; top: -5px;
+    width: 0; height: 0;
+    border-left: 7px solid var(--line);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+  .flow-arrow-text { font-family: var(--mono); font-size: 11px; color: var(--sub); padding: 0 12px; white-space: nowrap; }
+
+  .breakdown-group-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--sub);
+    margin: 18px 0 10px; display: flex; align-items: center; gap: 10px;
+  }
+  .breakdown-group-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .bd-row {
+    display: grid; grid-template-columns: 132px 1fr 198px;
+    align-items: center; gap: 14px; margin-bottom: 7px;
+  }
+  .bd-name { font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+  .bd-track { height: 22px; background: #ece8dc; border-radius: 3px; overflow: hidden; position: relative; cursor: ew-resize; }
+  .bd-fill { height: 100%; border-radius: 3px; }
+  .bd-track.draggable { overflow: visible; }
+  .bd-fill-base { height: 100%; position: absolute; left: 0; top: 0; border-radius: 3px 0 0 3px; }
+  .bd-fill-change { height: 100%; position: absolute; top: 0; }
+  .bd-drag-handle {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 8px;
+    margin-left: -4px;
+    cursor: ew-resize;
+    z-index: 5;
+  }
+  .bd-drag-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px; height: 12px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 2px;
+  }
+  .sim-row.active-drag { background: rgba(0,0,0,0.03); border-radius: 4px; }
+  .bd-value {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink);
+    text-align: right;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 42px;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .bd-value .pct {
+    color: var(--sub);
+    margin-left: 0;
+    text-align: right;
+  }
+
+  /* expandable rows */
+  .bd-row.expandable { cursor: pointer; }
+  .bd-row.expandable .bd-name { user-select: none; }
+  .expand-icon {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--market);
+    border: 1px solid var(--market);
+    border-radius: 50%;
+    width: 15px; height: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+  .bd-row.expandable.open .expand-icon { transform: rotate(45deg); }
+
+  .sub-panel {
+    grid-column: 1 / -1;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+    background: #efeade;
+    border-radius: 4px;
+  }
+  .sub-panel.open { max-height: 460px; }
+  #region-panel.open { max-height: 920px; }
+  .sub-panel-inner { padding: 10px 16px 12px 16px; }
+  .sub-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 11.5px;
+  }
+  .sub-row:last-child { border-bottom: none; }
+  .sub-row .sub-name { color: var(--ink); }
+  .sub-row .sub-value { font-family: var(--mono); color: var(--sub); white-space: nowrap; }
+  .sub-note {
+    font-size: 10px;
+    color: var(--sub);
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  .bd-total {
+    display: grid; grid-template-columns: 132px 1fr 198px;
+    align-items: center; gap: 14px;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1.5px solid var(--ink);
+  }
+  .bd-total .bd-name { font-weight: 700; font-family: var(--serif); font-size: 14px; }
+  .bd-total .bd-value { font-weight: 700; }
+
+  .footer {
+    margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 10px; color: var(--sub); line-height: 1.8;
+  }
+
+  /* ownership breakdown additions */
+  :root {
+    --owner-inst: #3d5a73;
+    --owner-house: #c1532f;
+    --owner-corp: #8a9a8c;
+    --owner-govt: #b8923c;
+  }
+  .estimate-banner {
+    background: #efe6d8;
+    border: 1px solid #d8c5a0;
+    border-radius: 4px;
+    padding: 10px 16px;
+    font-size: 11.5px;
+    color: #6b5a35;
+    margin: 14px 0 18px 0;
+    line-height: 1.6;
+  }
+  .estimate-banner strong { font-weight: 700; }
+  .who-group { margin-top: 16px; }
+  .who-group-label {
+    font-family: var(--mono); font-size: 10px; color: var(--sub);
+    letter-spacing: 0.08em; margin-bottom: 8px;
+  }
+  .who-row {
+    display: grid;
+    grid-template-columns: 170px 1fr 150px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 7px;
+    font-size: 11.5px;
+  }
+  .who-track { height: 18px; background: #ece8dc; border-radius: 3px; overflow: hidden; }
+  .who-seg { height: 100%; }
+  .who-value { font-family: var(--mono); font-size: 11px; color: var(--sub); text-align: right; }
+  .owner-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 10.5px;
+    color: var(--sub);
+    margin-top: 10px;
+  }
+  .owner-legend-item { display: flex; align-items: center; gap: 6px; }
+  .owner-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* universal inline simulator */
+  .sim-row { transition: background 0.3s ease; border-radius: 4px; }
+  .sim-row.changed-up { background: rgba(0, 140, 90, 0.10); }
+  .sim-row.changed-down { background: rgba(193, 83, 47, 0.10); }
+  .bd-value-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .sim-input {
+    width: 48px;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-align: right;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 2px 4px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .sim-input:focus { outline: none; border-color: var(--market); }
+  .sim-row.changed-up .sim-input { border-color: #008c5a; color: #008c5a; font-weight: 600; }
+  .sim-row.changed-down .sim-input { border-color: var(--market); color: var(--market); font-weight: 600; }
+  .sim-row.changed-up .bd-value, .sim-row.changed-down .bd-value { font-weight: 600; }
+  .sim-reset-row { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .sim-reset-btn {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--sub);
+    background: #ece8dc;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  .sim-reset-btn:hover { background: #e0dcd0; }
+  .logic-box {
+    background: #fbf6ea;
+    border: 1px solid #dac99f;
+    border-left: 4px solid var(--market);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 4px 0 18px;
+    color: #453f34;
+    font-size: 11.5px;
+    line-height: 1.75;
+  }
+  .logic-title {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .logic-grid {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+    margin: 10px 0;
+  }
+  .logic-card {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid #e2d6ba;
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .logic-card b { color: var(--ink); }
+  .logic-small { color: var(--sub); font-size: 10.5px; }
+  @media(max-width:760px){
+    body{padding:28px 18px}
+    .bd-row,.bd-total{grid-template-columns:110px 1fr;gap:8px}
+    .bd-value{grid-column:2;grid-template-columns:minmax(0,1fr) 40px}
+    .logic-grid{grid-template-columns:1fr}
+  }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;div class=&quot;masthead&quot;&gt;
+  &lt;h1&gt;世界のお金の全体像&lt;/h1&gt;
+  &lt;span class=&quot;rate&quot;&gt;1 USD = ¥160 換算　/　クリックで詳細展開&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;estimate-banner&quot; style=&quot;margin-bottom: 24px;&quot;&gt;
+  &lt;strong&gt;※「誰が持っているか」のセクションは、世界統一の公式統計が存在しないため、OECD・McKinsey・Allianz・各国年金基金統計などの実測値を組み合わせたフェルミ推定（合理的推計）です。&lt;/strong&gt;たたき台としてご活用ください。
+&lt;/div&gt;
+
+&lt;!-- TOP-LEVEL OWNER BAR for ①+② combined ($360T) --&gt;
+&lt;div class=&quot;block&quot;&gt;
+  &lt;div class=&quot;block-eyebrow&quot;&gt;誰が持っているか（推定） — ①＋②　$360T 全体に対して&lt;/div&gt;
+  &lt;div class=&quot;block-title&quot;&gt;機関投資家・個人・企業・政府の取り分&lt;/div&gt;
+
+  &lt;div class=&quot;split-bar&quot; style=&quot;height: 64px;&quot;&gt;
+    &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-inst); flex: 40; padding: 0 14px;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; style=&quot;top:6px; right:12px; font-size:11px;&quot;&gt;40%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot; style=&quot;font-size:12px; margin-bottom:2px;&quot;&gt;機関投資家&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; style=&quot;font-size:16px;&quot;&gt;$144T&lt;/span&gt;
+      &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;約¥2.30京 / 年金・保険・ファンド・SWF&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-house); flex: 40; padding: 0 14px;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; style=&quot;top:6px; right:12px; font-size:11px;&quot;&gt;40%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot; style=&quot;font-size:12px; margin-bottom:2px;&quot;&gt;個人・家庭&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; style=&quot;font-size:16px;&quot;&gt;$144T&lt;/span&gt;
+      &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;約¥2.30京 / 預金＋直接保有＋富裕層&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-corp); flex: 16; padding: 0 10px;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; style=&quot;top:6px; right:8px; font-size:11px;&quot;&gt;16%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot; style=&quot;font-size:11px; margin-bottom:2px;&quot;&gt;企業&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; style=&quot;font-size:14px;&quot;&gt;$57.6T&lt;/span&gt;
+      &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:9px;&quot;&gt;約¥9,216兆&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-govt); flex: 4; padding: 0 6px;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; style=&quot;top:6px; right:6px; font-size:10px;&quot;&gt;4%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;政府&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; style=&quot;font-size:12px;&quot;&gt;$14.4T&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;owner-legend&quot;&gt;
+    &lt;div class=&quot;owner-legend-item&quot;&gt;&lt;span class=&quot;owner-dot&quot; style=&quot;background:var(--owner-inst);&quot;&gt;&lt;/span&gt;機関投資家＝年金基金・保険会社・投資ファンド・政府系ファンド&lt;/div&gt;
+    &lt;div class=&quot;owner-legend-item&quot;&gt;&lt;span class=&quot;owner-dot&quot; style=&quot;background:var(--owner-house);&quot;&gt;&lt;/span&gt;個人・家庭＝銀行預金＋直接の株・債券保有＋富裕層資産&lt;/div&gt;
+    &lt;div class=&quot;owner-legend-item&quot;&gt;&lt;span class=&quot;owner-dot&quot; style=&quot;background:var(--owner-corp);&quot;&gt;&lt;/span&gt;企業＝運用資金・現金・持ち合い株式&lt;/div&gt;
+    &lt;div class=&quot;owner-legend-item&quot;&gt;&lt;span class=&quot;owner-dot&quot; style=&quot;background:var(--owner-govt);&quot;&gt;&lt;/span&gt;政府＝SWF以外の直接保有分&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- ① split --&gt;
+&lt;div class=&quot;block&quot;&gt;
+  &lt;div class=&quot;block-eyebrow&quot;&gt;① 世界の潜在的なお金の総額&lt;/div&gt;
+  &lt;div class=&quot;block-title&quot;&gt;銀行に眠るお金　＋　投資market に出ているお金&lt;/div&gt;
+
+  &lt;div class=&quot;split-bar&quot;&gt;
+    &lt;div class=&quot;split-seg bank expandable&quot; id=&quot;bank-row&quot; onclick=&quot;toggleRow('bank')&quot; style=&quot;cursor:pointer;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; id=&quot;bank-pct&quot;&gt;28%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot;&gt;銀行に眠るお金（現金・預金） &lt;span class=&quot;expand-icon&quot; id=&quot;bank-icon&quot; style=&quot;border-color:#fff; color:#fff; vertical-align:middle;&quot;&gt;+&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; id=&quot;bank-value&quot;&gt;$99T&lt;/span&gt;
+      &lt;span class=&quot;seg-jpy&quot; id=&quot;bank-jpy&quot;&gt;約¥1.58京（15,840兆円）&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;split-seg market expandable&quot; id=&quot;mkt-row&quot; onclick=&quot;toggleRow('mkt')&quot; style=&quot;cursor:pointer;&quot;&gt;
+      &lt;span class=&quot;seg-pct&quot; id=&quot;mkt-pct&quot;&gt;72%&lt;/span&gt;
+      &lt;span class=&quot;seg-label&quot;&gt;投資market に出ているお金 ② &lt;span class=&quot;expand-icon&quot; id=&quot;mkt-icon&quot; style=&quot;border-color:#fff; color:#fff; vertical-align:middle;&quot;&gt;+&lt;/span&gt;&lt;/span&gt;
+      &lt;span class=&quot;seg-value&quot; id=&quot;mkt-value&quot;&gt;$261T&lt;/span&gt;
+      &lt;span class=&quot;seg-jpy&quot; id=&quot;mkt-jpy&quot;&gt;約¥4.18京（41,760兆円）&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;sub-panel&quot; id=&quot;bank-panel&quot;&gt;
+    &lt;div class=&quot;sub-panel-inner&quot;&gt;
+      &lt;div class=&quot;who-group-label&quot;&gt;銀行に眠るお金 $99T の預け元（推定）&lt;/div&gt;
+      &lt;div class=&quot;split-bar&quot; style=&quot;height: 48px; border-width: 1px;&quot;&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-house); flex: 55; padding: 0 10px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:11px; margin-bottom:1px;&quot;&gt;個人・家庭 55%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;$54.5T（約¥8,720兆）&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-corp); flex: 35; padding: 0 10px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:11px; margin-bottom:1px;&quot;&gt;企業 35%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;$34.6T（約¥5,536兆）&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-govt); flex: 10; padding: 0 8px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;政府 10%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:9px;&quot;&gt;$9.9T（約¥1,584兆）&lt;/span&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;sub-panel&quot; id=&quot;mkt-panel&quot;&gt;
+    &lt;div class=&quot;sub-panel-inner&quot;&gt;
+      &lt;div class=&quot;who-group-label&quot;&gt;投資market のお金 $261T の保有者（推定）&lt;/div&gt;
+      &lt;div class=&quot;split-bar&quot; style=&quot;height: 48px; border-width: 1px;&quot;&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-inst); flex: 55; padding: 0 10px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:11px; margin-bottom:1px;&quot;&gt;機関投資家 55%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;$142.3T（約¥2.28京）&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-house); flex: 34; padding: 0 10px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:11px; margin-bottom:1px;&quot;&gt;個人・家庭 34%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:10px;&quot;&gt;$89.0T（約¥1.42京）&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-corp); flex: 9; padding: 0 8px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;企業 9%&lt;/span&gt;
+          &lt;span class=&quot;seg-jpy&quot; style=&quot;font-size:9px;&quot;&gt;$23.7T（約¥3,792兆）&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--owner-govt); flex: 2; padding: 0 4px;&quot;&gt;
+          &lt;span class=&quot;seg-label&quot; style=&quot;font-size:9px;&quot;&gt;政府&lt;/span&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sub-note&quot; style=&quot;margin-top:10px;&quot;&gt;
+        個人の手元にあるお金（銀行預金$54.5T＋投資market保有$89.0T＝$143.5T）のうち、投資market に回っているのは約62%という推定ですが、これは富裕層に引き上げられた「平均」です。内訳を分解すると、上位1.1%の富裕層（UBS調査基準, 個人資産の45.8%を保有）は推定&lt;strong&gt;85%前後&lt;/strong&gt;を投資market に置いていると見られ（数十億円規模の現金を銀行に置く理由がないため）、残り98.9%の典型的な個人は推定&lt;strong&gt;45%前後&lt;/strong&gt;（40〜50%の範囲）という計算になります。85%×45.8%＋45%×54.2%≒63%で、ほぼ62%の平均と整合します。なお②全体を実際に押し上げているのは年金基金・保険会社・政府系ファンドなどの機関投資家（推定55%）です。
+      &lt;/div&gt;
+
+      &lt;div class=&quot;bd-row expandable&quot; id=&quot;region-row&quot; onclick=&quot;toggleRow('region')&quot; style=&quot;margin-top:12px; grid-template-columns: 1fr;&quot;&gt;
+        &lt;div class=&quot;bd-name&quot;&gt;&lt;span class=&quot;expand-icon&quot; id=&quot;region-icon&quot;&gt;+&lt;/span&gt;地域別の現金 vs 投資の比率（典型的個人）を見る&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sub-panel&quot; id=&quot;region-panel&quot;&gt;
+        &lt;div class=&quot;sub-panel-inner&quot;&gt;
+          &lt;div class=&quot;who-group-label&quot;&gt;地域ごとに大きく異なる「現金 vs 投資」比率（典型的個人）&lt;/div&gt;
+
+          &lt;div style=&quot;font-size:11px; color:var(--sub); margin-bottom:6px;&quot;&gt;日本&lt;/div&gt;
+          &lt;div class=&quot;split-bar&quot; style=&quot;height: 36px; border-width: 1px; margin-bottom: 12px;&quot;&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--bank-deep); flex: 50.9; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;現金・預金 51%&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--market); flex: 49.1; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;投資 49%&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+
+          &lt;div style=&quot;font-size:11px; color:var(--sub); margin-bottom:6px;&quot;&gt;アジア（除く日本）&lt;/div&gt;
+          &lt;div class=&quot;split-bar&quot; style=&quot;height: 36px; border-width: 1px; margin-bottom: 12px;&quot;&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--bank-deep); flex: 52.5; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;現金・預金 53%&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--market); flex: 47.5; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;投資 48%&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+
+          &lt;div style=&quot;font-size:11px; color:var(--sub); margin-bottom:6px;&quot;&gt;米国&lt;/div&gt;
+          &lt;div class=&quot;split-bar&quot; style=&quot;height: 36px; border-width: 1px; margin-bottom: 12px;&quot;&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--bank-deep); flex: 15; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;現金 15%&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--market); flex: 85; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;投資 85%&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+
+          &lt;div style=&quot;font-size:11px; color:var(--sub); margin-bottom:6px;&quot;&gt;西欧&lt;/div&gt;
+          &lt;div class=&quot;split-bar&quot; style=&quot;height: 36px; border-width: 1px;&quot;&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--bank-deep); flex: 15; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;現金 15%&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;split-seg&quot; style=&quot;background:var(--market); flex: 85; padding: 0 8px;&quot;&gt;
+              &lt;span class=&quot;seg-label&quot; style=&quot;font-size:10px;&quot;&gt;投資 85%&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+
+          &lt;div class=&quot;sub-note&quot; style=&quot;margin-top:12px;&quot;&gt;
+            日本＝日本銀行「資金循環統計」2024年3月時点（現金・預金50.9%）。アジア（除く日本）・米欧の比率＝CEOWORLD magazine, 2026年（アジア全体で現金・預金50〜55%、米欧は15%程度という推定値を基に算出）。これらは国全体（富裕層含む）の数値であり、典型的個人だけを厳密に分離した統計ではない点に注意。
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;total-readout&quot;&gt;
+    &lt;span class=&quot;total-label&quot;&gt;① TOTAL&lt;/span&gt;
+    &lt;strong&gt;$360T（約¥5.76京）&lt;/strong&gt;
+    &lt;span&gt;＝ 銀行のお金 ＋ 投資market のお金&lt;/span&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;flow-arrow&quot;&gt;
+  &lt;span class=&quot;flow-arrow-text&quot;&gt;この&lt;span id=&quot;flow-pct&quot;&gt;72&lt;/span&gt;%を内訳すると ↓&lt;/span&gt;
+  &lt;span class=&quot;flow-arrow-line&quot;&gt;&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;!-- ③ breakdown --&gt;
+&lt;div class=&quot;block&quot;&gt;
+  &lt;div class=&quot;block-eyebrow&quot;&gt;③ 投資market（②）の内訳 — 合計が②と一致　／　各行をドラッグしてシミュレーション&lt;/div&gt;
+  &lt;div class=&quot;block-title&quot;&gt;&lt;span id=&quot;block-title-amount&quot;&gt;261兆ドル&lt;/span&gt;が何に投資されているか&lt;/div&gt;
+  &lt;div class=&quot;breakdown-group-label&quot;&gt;銀行に眠るお金（現金・預金）　計 &lt;span id=&quot;bank-total&quot;&gt;$99.0T（約¥1.58京）&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;bank-money&quot; data-base=&quot;99&quot; data-group=&quot;bank&quot; data-color=&quot;var(--bank)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;銀行に眠るお金&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-bank-money&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-bank-money&quot; style=&quot;width:100.00%; background:var(--bank);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-bank-money&quot; style=&quot;width:0%; left:100.00%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-bank-money&quot; style=&quot;left:100.00%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-bank-money&quot;&gt;$99.0T（¥1.58京）&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;breakdown-group-label&quot;&gt;株式　計 &lt;span id=&quot;equity-total&quot;&gt;$127.9T（約¥2.05京）&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;us-equity&quot; data-base=&quot;81.8&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;米国株式&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-us-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-us-equity&quot; style=&quot;width:100.00%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-us-equity&quot; style=&quot;width:0%; left:100.00%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-us-equity&quot; style=&quot;left:100.00%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-us-equity&quot;&gt;$81.8T（¥1.31京） &lt;span class=&quot;pct&quot;&gt;31.3%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;asia-equity&quot; data-base=&quot;15.3&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;アジア株式(除日本)&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-asia-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-asia-equity&quot; style=&quot;width:18.70%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-asia-equity&quot; style=&quot;width:0%; left:18.70%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-asia-equity&quot; style=&quot;left:18.70%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-asia-equity&quot;&gt;$15.3T（¥2,448兆） &lt;span class=&quot;pct&quot;&gt;5.9%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;europe-equity&quot; data-base=&quot;14.1&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;欧州株式(除UK)&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-europe-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-europe-equity&quot; style=&quot;width:17.24%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-europe-equity&quot; style=&quot;width:0%; left:17.24%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-europe-equity&quot; style=&quot;left:17.24%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-europe-equity&quot;&gt;$14.1T（¥2,256兆） &lt;span class=&quot;pct&quot;&gt;5.4%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;japan-equity&quot; data-base=&quot;6.4&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;日本株式&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-japan-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-japan-equity&quot; style=&quot;width:7.82%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-japan-equity&quot; style=&quot;width:0%; left:7.82%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-japan-equity&quot; style=&quot;left:7.82%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-japan-equity&quot;&gt;$6.4T（¥1,024兆） &lt;span class=&quot;pct&quot;&gt;2.5%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;uk-equity&quot; data-base=&quot;3.8&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;UK株式&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-uk-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-uk-equity&quot; style=&quot;width:4.65%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-uk-equity&quot; style=&quot;width:0%; left:4.65%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-uk-equity&quot; style=&quot;left:4.65%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-uk-equity&quot;&gt;$3.8T（¥608兆） &lt;span class=&quot;pct&quot;&gt;1.5%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;other-equity&quot; data-base=&quot;6.4&quot; data-group=&quot;equity&quot; data-color=&quot;var(--market)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;その他株式&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-other-equity&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-other-equity&quot; style=&quot;width:7.82%; background:var(--market);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-other-equity&quot; style=&quot;width:0%; left:7.82%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-other-equity&quot; style=&quot;left:7.82%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-other-equity&quot;&gt;$6.4T（¥1,024兆） &lt;span class=&quot;pct&quot;&gt;2.5%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;breakdown-group-label&quot;&gt;債券　計 &lt;span id=&quot;bond-total&quot;&gt;$96.6T（約¥1.55京）&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;us-bond&quot; data-base=&quot;41.5&quot; data-group=&quot;bond&quot; data-color=&quot;var(--bank-deep)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;米国債&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-us-bond&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-us-bond&quot; style=&quot;width:50.73%; background:var(--bank-deep);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-us-bond&quot; style=&quot;width:0%; left:50.73%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-us-bond&quot; style=&quot;left:50.73%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-us-bond&quot;&gt;$41.5T（¥6,640兆） &lt;span class=&quot;pct&quot;&gt;15.9%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;europe-bond&quot; data-base=&quot;28.0&quot; data-group=&quot;bond&quot; data-color=&quot;var(--bank-deep)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;欧州債&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-europe-bond&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-europe-bond&quot; style=&quot;width:34.23%; background:var(--bank-deep);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-europe-bond&quot; style=&quot;width:0%; left:34.23%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-europe-bond&quot; style=&quot;left:34.23%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-europe-bond&quot;&gt;$28.0T（¥4,480兆） &lt;span class=&quot;pct&quot;&gt;10.7%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;asia-bond&quot; data-base=&quot;20.3&quot; data-group=&quot;bond&quot; data-color=&quot;var(--bank-deep)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;アジア債(除日本)&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-asia-bond&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-asia-bond&quot; style=&quot;width:24.82%; background:var(--bank-deep);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-asia-bond&quot; style=&quot;width:0%; left:24.82%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-asia-bond&quot; style=&quot;left:24.82%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-asia-bond&quot;&gt;$20.3T（¥3,248兆） &lt;span class=&quot;pct&quot;&gt;7.8%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;other-bond&quot; data-base=&quot;6.8&quot; data-group=&quot;bond&quot; data-color=&quot;var(--bank-deep)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;その他債券&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-other-bond&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-other-bond&quot; style=&quot;width:8.31%; background:var(--bank-deep);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-other-bond&quot; style=&quot;width:0%; left:8.31%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-other-bond&quot; style=&quot;left:8.31%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-other-bond&quot;&gt;$6.8T（¥1,088兆） &lt;span class=&quot;pct&quot;&gt;2.6%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;breakdown-group-label&quot;&gt;その他資産　計 &lt;span id=&quot;other-total&quot;&gt;$36.6T（約¥5,856兆）&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;gold&quot; data-base=&quot;15.7&quot; data-group=&quot;other&quot; data-color=&quot;var(--gold)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;金&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-gold&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-gold&quot; style=&quot;width:19.19%; background:var(--gold);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-gold&quot; style=&quot;width:0%; left:19.19%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-gold&quot; style=&quot;left:19.19%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-gold&quot;&gt;$15.7T（¥2,512兆） &lt;span class=&quot;pct&quot;&gt;6.0%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;private&quot; data-base=&quot;13.1&quot; data-group=&quot;other&quot; data-color=&quot;var(--gold)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;未公開市場&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-private&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-private&quot; style=&quot;width:16.01%; background:var(--gold);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-private&quot; style=&quot;width:0%; left:16.01%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-private&quot; style=&quot;left:16.01%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-private&quot;&gt;$13.1T（¥2,096兆） &lt;span class=&quot;pct&quot;&gt;5.0%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;realestate&quot; data-base=&quot;5.2&quot; data-group=&quot;other&quot; data-color=&quot;var(--gold)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;&lt;span class=&quot;expand-icon&quot; id=&quot;re-icon&quot; onclick=&quot;toggleRow('re')&quot; style=&quot;cursor:pointer; margin-right:4px;&quot;&gt;+&lt;/span&gt;不動産&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-realestate&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-realestate&quot; style=&quot;width:6.36%; background:var(--gold);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-realestate&quot; style=&quot;width:0%; left:6.36%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-realestate&quot; style=&quot;left:6.36%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-realestate&quot;&gt;$5.2T（¥832兆） &lt;span class=&quot;pct&quot;&gt;2.0%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;sub-panel&quot; id=&quot;re-panel&quot;&gt;
+    &lt;div class=&quot;sub-panel-inner&quot;&gt;
+      &lt;div class=&quot;sub-row&quot;&gt;
+        &lt;span class=&quot;sub-name&quot;&gt;J-REIT（日本の不動産投資信託市場）&lt;/span&gt;
+        &lt;span class=&quot;sub-value&quot;&gt;$0.151T（¥2,423億）　不動産全体の2.9%&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sub-row&quot;&gt;
+        &lt;span class=&quot;sub-name&quot;&gt;その他（海外REIT・私募不動産ファンド等）&lt;/span&gt;
+        &lt;span class=&quot;sub-value&quot;&gt;残り $5.049T（¥807.8兆）　97.1%&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;sub-note&quot;&gt;
+        出典：J-REIT全体運用資産残高 24兆2,289億円（2026年2月末、JAPAN-REIT.COM）
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;bd-row sim-row&quot; data-id=&quot;crypto&quot; data-base=&quot;2.6&quot; data-group=&quot;other&quot; data-color=&quot;var(--gold)&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;暗号資産&lt;/div&gt;
+    &lt;div class=&quot;bd-track draggable&quot; id=&quot;track-crypto&quot;&gt;
+      &lt;div class=&quot;bd-fill-base&quot; id=&quot;barbase-crypto&quot; style=&quot;width:3.18%; background:var(--gold);&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-fill-change&quot; id=&quot;barchange-crypto&quot; style=&quot;width:0%; left:3.18%; background:transparent;&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;bd-drag-handle&quot; id=&quot;handle-crypto&quot; style=&quot;left:3.18%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-crypto&quot;&gt;$2.6T（¥416兆） &lt;span class=&quot;pct&quot;&gt;1.0%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;bd-row&quot; id=&quot;row-destroyed&quot; style=&quot;display:none; opacity:0.7;&quot;&gt;
+    &lt;div class=&quot;bd-name&quot; style=&quot;color:var(--sub); font-size:11.5px;&quot;&gt;純粋な評価減（消失・誰の手にも渡らない）&lt;/div&gt;
+    &lt;div class=&quot;bd-track&quot;&gt;&lt;div class=&quot;bd-fill&quot; id=&quot;bar-destroyed&quot; style=&quot;width:0%; background:repeating-linear-gradient(45deg, #c7c2b3, #c7c2b3 4px, transparent 4px, transparent 8px);&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-destroyed&quot; style=&quot;color:var(--sub); font-size:11.5px;&quot;&gt;$0.0T&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;bd-total&quot;&gt;
+    &lt;div class=&quot;bd-name&quot;&gt;合計（②）&lt;/div&gt;
+    &lt;div&gt;&lt;/div&gt;
+    &lt;div class=&quot;bd-value&quot; id=&quot;val-total-market&quot;&gt;$261.0T（¥4.18京） &lt;span class=&quot;pct&quot;&gt;100%&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;sim-reset-row&quot;&gt;
+    &lt;button class=&quot;sim-reset-btn&quot; onclick=&quot;resetSimulation()&quot;&gt;リセット（初期値に戻す）&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+
+  &lt;div class=&quot;logic-box&quot;&gt;
+    &lt;div class=&quot;logic-title&quot;&gt;資金配分ロジック：安全資産度スコア × 局面別フローで動かす&lt;/div&gt;
+    &lt;p&gt;
+      このシミュレーターでは、各資産に「安全資産度スコア」を持たせています。
+      米国債が &lt;b&gt;+2.0&lt;/b&gt;、銀行のお金・現金が &lt;b&gt;+1.6&lt;/b&gt;、金が &lt;b&gt;+1.0&lt;/b&gt;、欧州債が &lt;b&gt;+0.8&lt;/b&gt;、アジア債・その他債券が &lt;b&gt;+0.2&lt;/b&gt;。
+      逆に、米国株式は &lt;b&gt;-1.5&lt;/b&gt;、暗号資産は &lt;b&gt;-1.3&lt;/b&gt;、未公開市場は &lt;b&gt;-1.2&lt;/b&gt;、その他の株式は &lt;b&gt;-1.0&lt;/b&gt;、不動産は &lt;b&gt;-0.3&lt;/b&gt; としています。
+    &lt;/p&gt;
+    &lt;div class=&quot;logic-grid&quot;&gt;
+      &lt;div class=&quot;logic-card&quot;&gt;
+        &lt;b&gt;資産を減らした場合&lt;/b&gt;&lt;br&gt;
+        例：米国株式を下げる。減った金額の一部は評価減として消え、残りは米国債・銀行のお金・金などの安全資産を中心に流れます。ただし、国際分散や米国集中の巻き戻しも現実に起きるため、日本株・アジア株・欧州株にも小さく配分します。
+      &lt;/div&gt;
+      &lt;div class=&quot;logic-card&quot;&gt;
+        &lt;b&gt;資産を増やした場合&lt;/b&gt;&lt;br&gt;
+        例：銀行のお金を下げる。これは「眠っていた現金が投資に出る」動きなので、株式、債券、不動産、未公開市場、金へ配分します。逆に米国債を上げる場合は、リスク資産からの退避として、株式・未公開市場・暗号資産などから資金を引きます。
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;p&gt;
+      評価減として消える比率は資産ごとに変えています。銀行のお金は評価減なし、国債は小さめ、上場株式は中程度、未公開市場・暗号資産は大きめです。
+      株価下落の多くは、誰かが売って現金化した結果だけではなく、保有されたまま市場評価が縮む現象でもあるためです。この消失分は③の最後に斜線パターンの行として表示され、②の合計もその分だけ小さくなります。
+    &lt;/p&gt;
+    &lt;p class=&quot;logic-small&quot;&gt;
+      根拠は、2008年金融危機や2020年コロナショック時の flight-to-quality / flight-to-liquidity、MMF・国債への退避、Fed Z.1 の資金循環統計、国際分散とホームバイアスの研究です。
+      2020年3月のように債券も一時的に売られる流動性危機があるため、国債・現金も「絶対安全」とは置いていません。暗号資産は安全資産性が安定せず、金もパニック初期には強制清算で売られる場合があります。
+      このモデルは実証研究をもとにしたフェルミ推定であり、金利急騰、信用不安、地政学リスク、米国一極集中の巻き戻しなど、危機の性質によって現実の配分は変わります。
+    &lt;/p&gt;
+  &lt;/div&gt;
+
+&lt;div class=&quot;footer&quot;&gt;
+  出典：投資market 内訳（③）— Visual Capitalist／Goldman Sachs Investment Research, 2025年&lt;br&gt;
+  J-REIT — JAPAN-REIT.COM, 2026年2月末時点運用資産残高&lt;br&gt;
+  銀行に眠るお金（現金・預金）— 米欧中日4経済圏の合計、EBC Financial Group, 2026年初&lt;br&gt;
+  ※原油市場は「ストック資産」ではなく「年間取引フロー」で測られるため、株式・債券と同じ尺度で比較できず、本図には含めていません。&lt;br&gt;
+  ※①の72%は世界全体の統計であり、個人の貯金における投資比率を示すものではありません。為替は1ドル=160円で換算した参考値です。&lt;br&gt;
+  &lt;br&gt;
+  「誰が持っているか」の推計根拠：OECD「Owners of the World's Listed Companies」（上場株式の40%超を機関投資家が保有, 2017年実測）を起点に、&lt;br&gt;
+  　　Thinking Ahead Institute（世界年金資産$58.5T, 2024）、Global SWF（世界政府系ファンド$15T, 2025）、ICI/EBC（MMF・投資信託統計）を加味し、&lt;br&gt;
+  　　資産クラスごとの機関投資家保有比率（株式47%・債券65%・金30%・未公開市場85%・不動産55%・暗号資産25%）から逆算した合理的推定値。公式の世界統一統計ではありません。
+&lt;/div&gt;
+
+&lt;script&gt;
+function toggleRow(id) {
+  const panel = document.getElementById(id + '-panel');
+  const icon = document.getElementById(id + '-icon');
+  const isOpen = panel.classList.contains('open');
+  if (isOpen) {
+    panel.classList.remove('open');
+    if (icon) icon.classList.remove('open');
+  } else {
+    panel.classList.add('open');
+    if (icon) icon.classList.add('open');
+  }
+}
+
+// All ③ line items
+const ITEMS = [
+  &quot;bank-money&quot;,
+  &quot;us-equity&quot;, &quot;asia-equity&quot;, &quot;europe-equity&quot;, &quot;japan-equity&quot;, &quot;uk-equity&quot;, &quot;other-equity&quot;,
+  &quot;us-bond&quot;, &quot;europe-bond&quot;, &quot;asia-bond&quot;, &quot;other-bond&quot;,
+  &quot;gold&quot;, &quot;private&quot;, &quot;realestate&quot;, &quot;crypto&quot;
+];
+
+const BASE = {};
+const GROUP = {};
+ITEMS.forEach(function(id) {
+  const row = document.querySelector('.sim-row[data-id=&quot;' + id + '&quot;]');
+  BASE[id] = parseFloat(row.getAttribute('data-base'));
+  GROUP[id] = row.getAttribute('data-group');
+});
+
+const GRAND_TOTAL = 360.0; // bank-money + all ③ items combined
+const MAX_BASE_ID = ITEMS.reduce(function(a, b) { return BASE[a] &gt; BASE[b] ? a : b; });
+
+// palette for successive drag operations (each drag = one operation = one color)
+const OP_COLORS = ['#7b3fa0', '#1f8a70', '#c97a1a', '#2266c2', '#a02050', '#5a8c1f'];
+let opCounter = 0;
+
+// operations: { id: sourceId, delta: $T (signed, this is the source's own change), color: '#xxx' }
+let operations = [];
+
+function fmtT(val) { return val.toFixed(1); }
+function fmtJPY(valT) {
+  const cho = valT * 160;
+  if (cho &gt;= 10000) { return (cho / 10000).toFixed(2) + '京'; }
+  return Math.round(cho).toLocaleString() + '兆円';
+}
+
+// compute current value of each item given all operations so far
+// safe-haven weight per item, based on flight-to-quality / flight-to-safety literature:
+// positive = tends to GAIN inflows when risk assets sell off (safe haven)
+// negative = tends to LOSE alongside risk assets sell off (correlated risk asset)
+// 0 = roughly neutral / mixed evidence
+// Sources: Wikipedia &quot;Flight-to-quality&quot;; SEC/Treasury MMF reports on 2008 &amp; 2020;
+// OWNx (2026) on gold's conditional safe-haven behavior; arXiv 2202.10760 &amp;
+// ScienceDirect on crypto's weak/absent safe-haven property during COVID-19 crash.
+const SAFE_HAVEN_WEIGHT = {
+  &quot;bank-money&quot;: 1.6,      // 現金・預金・MMF。危機時の強い受け皿。
+  &quot;us-bond&quot;: 2.0,         // 米国債。flight-to-quality の本流。
+  &quot;europe-bond&quot;: 0.8,     // 信用力の高い国債。ただし米国債より弱い。
+  &quot;asia-bond&quot;: 0.2,       // 国・通貨差が大きいため小さめ。
+  &quot;other-bond&quot;: 0.2,
+  &quot;gold&quot;: 1.0,            // 条件付き安全資産。パニック初期は売られる場合もある。
+  &quot;us-equity&quot;: -1.5,
+  &quot;asia-equity&quot;: -1.0,
+  &quot;europe-equity&quot;: -1.0,
+  &quot;japan-equity&quot;: -1.0,
+  &quot;uk-equity&quot;: -1.0,
+  &quot;other-equity&quot;: -1.0,
+  &quot;private&quot;: -1.2,        // 未公開市場。流動性が低いリスク資産。
+  &quot;realestate&quot;: -0.3,     // 比較的安定だが流動性は低い。
+  &quot;crypto&quot;: -1.3          // 危機時の安全資産性は安定確認されていない。
+};
+
+const EQUITY_IDS = [&quot;us-equity&quot;, &quot;asia-equity&quot;, &quot;europe-equity&quot;, &quot;japan-equity&quot;, &quot;uk-equity&quot;, &quot;other-equity&quot;];
+const BOND_IDS = [&quot;us-bond&quot;, &quot;europe-bond&quot;, &quot;asia-bond&quot;, &quot;other-bond&quot;];
+
+const DESTROYED_BY_SOURCE = {
+  &quot;bank-money&quot;: 0.00,
+  &quot;us-bond&quot;: 0.10,
+  &quot;europe-bond&quot;: 0.10,
+  &quot;asia-bond&quot;: 0.10,
+  &quot;other-bond&quot;: 0.10,
+  &quot;gold&quot;: 0.15,
+  &quot;us-equity&quot;: 0.25,
+  &quot;asia-equity&quot;: 0.25,
+  &quot;europe-equity&quot;: 0.25,
+  &quot;japan-equity&quot;: 0.25,
+  &quot;uk-equity&quot;: 0.25,
+  &quot;other-equity&quot;: 0.25,
+  &quot;private&quot;: 0.30,
+  &quot;realestate&quot;: 0.20,
+  &quot;crypto&quot;: 0.35
+};
+
+function isEquity(id) { return EQUITY_IDS.indexOf(id) &gt;= 0; }
+function isBond(id) { return BOND_IDS.indexOf(id) &gt;= 0; }
+
+function mergeWeights() {
+  const merged = {};
+  Array.prototype.slice.call(arguments).forEach(function(weights) {
+    Object.keys(weights).forEach(function(id) {
+      merged[id] = (merged[id] || 0) + weights[id];
+    });
+  });
+  return merged;
+}
+
+function safeTilt(ids, multiplier) {
+  const out = {};
+  ids.forEach(function(id) { out[id] = Math.max(0, SAFE_HAVEN_WEIGHT[id]) * multiplier; });
+  return out;
+}
+
+function riskTilt(ids, multiplier) {
+  const out = {};
+  ids.forEach(function(id) { out[id] = Math.max(0, -SAFE_HAVEN_WEIGHT[id]) * multiplier; });
+  return out;
+}
+
+function distributeWeighted(weights, amount, sign, excludeId, val, contributions, color) {
+  const entries = Object.keys(weights)
+    .filter(function(id) { return id !== excludeId &amp;&amp; ITEMS.indexOf(id) &gt;= 0 &amp;&amp; weights[id] &gt; 0; })
+    .map(function(id) { return { id: id, weight: weights[id] }; });
+  const weightSum = entries.reduce(function(s, entry) { return s + entry.weight; }, 0);
+  if (!entries.length || weightSum &lt;= 0 || amount &lt;= 0) return;
+
+  entries.forEach(function(entry) {
+    const amt = sign * amount * entry.weight / weightSum;
+    val[entry.id] += amt;
+    contributions[entry.id].push({ color: color, amount: amt });
+  });
+}
+
+function receiverWeightsForOutflow(id) {
+  const safetyCore = safeTilt([&quot;bank-money&quot;, &quot;us-bond&quot;, &quot;europe-bond&quot;, &quot;asia-bond&quot;, &quot;other-bond&quot;, &quot;gold&quot;], 1.0);
+  const equityRotation = {
+    &quot;us-equity&quot;: 0.45,
+    &quot;asia-equity&quot;: 0.35,
+    &quot;europe-equity&quot;: 0.35,
+    &quot;japan-equity&quot;: 0.35,
+    &quot;uk-equity&quot;: 0.15,
+    &quot;other-equity&quot;: 0.20
+  };
+
+  if (id === &quot;bank-money&quot;) {
+    return {
+      &quot;us-equity&quot;: 2.4,
+      &quot;asia-equity&quot;: 0.7,
+      &quot;europe-equity&quot;: 0.7,
+      &quot;japan-equity&quot;: 0.4,
+      &quot;uk-equity&quot;: 0.2,
+      &quot;other-equity&quot;: 0.4,
+      &quot;us-bond&quot;: 1.0,
+      &quot;europe-bond&quot;: 0.6,
+      &quot;asia-bond&quot;: 0.3,
+      &quot;other-bond&quot;: 0.2,
+      &quot;private&quot;: 0.8,
+      &quot;realestate&quot;: 0.5,
+      &quot;gold&quot;: 0.4,
+      &quot;crypto&quot;: 0.2
+    };
+  }
+
+  if (id === &quot;us-equity&quot;) {
+    return mergeWeights(safetyCore, {
+      &quot;asia-equity&quot;: 0.35,
+      &quot;europe-equity&quot;: 0.35,
+      &quot;japan-equity&quot;: 0.35,
+      &quot;uk-equity&quot;: 0.15,
+      &quot;other-equity&quot;: 0.20,
+      &quot;realestate&quot;: 0.15
+    });
+  }
+
+  if (isEquity(id)) {
+    return mergeWeights(safetyCore, equityRotation, { &quot;us-equity&quot;: 0.45 });
+  }
+
+  if (isBond(id)) {
+    return {
+      &quot;bank-money&quot;: 0.5,
+      &quot;us-equity&quot;: 1.6,
+      &quot;asia-equity&quot;: 0.45,
+      &quot;europe-equity&quot;: 0.45,
+      &quot;japan-equity&quot;: 0.25,
+      &quot;uk-equity&quot;: 0.15,
+      &quot;other-equity&quot;: 0.25,
+      &quot;private&quot;: 0.7,
+      &quot;realestate&quot;: 0.5,
+      &quot;gold&quot;: 0.35,
+      &quot;crypto&quot;: 0.15
+    };
+  }
+
+  if (id === &quot;gold&quot;) {
+    return {
+      &quot;bank-money&quot;: 0.8,
+      &quot;us-bond&quot;: 0.8,
+      &quot;us-equity&quot;: 1.2,
+      &quot;asia-equity&quot;: 0.35,
+      &quot;europe-equity&quot;: 0.35,
+      &quot;japan-equity&quot;: 0.2,
+      &quot;private&quot;: 0.4,
+      &quot;realestate&quot;: 0.3,
+      &quot;crypto&quot;: 0.1
+    };
+  }
+
+  if (id === &quot;private&quot; || id === &quot;realestate&quot;) {
+    return mergeWeights(safetyCore, {
+      &quot;us-equity&quot;: 0.35,
+      &quot;asia-equity&quot;: 0.2,
+      &quot;europe-equity&quot;: 0.2,
+      &quot;japan-equity&quot;: 0.15
+    });
+  }
+
+  if (id === &quot;crypto&quot;) {
+    return {
+      &quot;bank-money&quot;: 1.6,
+      &quot;us-bond&quot;: 1.5,
+      &quot;gold&quot;: 1.0,
+      &quot;us-equity&quot;: 0.4,
+      &quot;asia-equity&quot;: 0.15,
+      &quot;europe-equity&quot;: 0.15,
+      &quot;japan-equity&quot;: 0.1
+    };
+  }
+
+  return safetyCore;
+}
+
+function funderWeightsForInflow(id) {
+  if (id === &quot;bank-money&quot; || id === &quot;us-bond&quot;) {
+    return mergeWeights(riskTilt(EQUITY_IDS, 1.0), riskTilt([&quot;private&quot;, &quot;realestate&quot;, &quot;crypto&quot;], 1.0), { &quot;gold&quot;: 0.2 });
+  }
+
+  if (isEquity(id)) {
+    const base = {
+      &quot;bank-money&quot;: 1.8,
+      &quot;us-bond&quot;: 1.2,
+      &quot;europe-bond&quot;: 0.6,
+      &quot;asia-bond&quot;: 0.3,
+      &quot;other-bond&quot;: 0.2,
+      &quot;gold&quot;: 0.4,
+      &quot;realestate&quot;: 0.2,
+      &quot;private&quot;: 0.2
+    };
+    if (id !== &quot;us-equity&quot;) base[&quot;us-equity&quot;] = 0.5;
+    return base;
+  }
+
+  if (isBond(id)) {
+    return {
+      &quot;bank-money&quot;: 0.8,
+      &quot;us-equity&quot;: 0.7,
+      &quot;asia-equity&quot;: 0.5,
+      &quot;europe-equity&quot;: 0.5,
+      &quot;japan-equity&quot;: 0.4,
+      &quot;uk-equity&quot;: 0.3,
+      &quot;other-equity&quot;: 0.3,
+      &quot;private&quot;: 0.5,
+      &quot;crypto&quot;: 0.4,
+      &quot;gold&quot;: 0.2
+    };
+  }
+
+  if (id === &quot;gold&quot;) {
+    return {
+      &quot;bank-money&quot;: 0.7,
+      &quot;us-bond&quot;: 0.4,
+      &quot;us-equity&quot;: 1.0,
+      &quot;asia-equity&quot;: 0.5,
+      &quot;europe-equity&quot;: 0.5,
+      &quot;japan-equity&quot;: 0.4,
+      &quot;private&quot;: 0.5,
+      &quot;crypto&quot;: 0.3
+    };
+  }
+
+  if (id === &quot;private&quot; || id === &quot;realestate&quot; || id === &quot;crypto&quot;) {
+    return {
+      &quot;bank-money&quot;: 1.4,
+      &quot;us-bond&quot;: 0.9,
+      &quot;europe-bond&quot;: 0.4,
+      &quot;gold&quot;: 0.3,
+      &quot;us-equity&quot;: 0.6,
+      &quot;asia-equity&quot;: 0.3,
+      &quot;europe-equity&quot;: 0.3,
+      &quot;japan-equity&quot;: 0.2
+    };
+  }
+
+  return riskTilt(ITEMS, 1.0);
+}
+
+function computeValues(opsList) {
+  const val = {};
+  ITEMS.forEach(function(id) { val[id] = BASE[id]; });
+
+  // contributions[id] = array of {color, amount} -- signed amount contributed by each op to this item
+  const contributions = {};
+  ITEMS.forEach(function(id) { contributions[id] = []; });
+  let totalDestroyed = 0;
+  const destroyedContribs = []; // {color, amount}
+
+  opsList.forEach(function(op) {
+    val[op.id] += op.delta;
+    contributions[op.id].push({ color: op.color, amount: op.delta });
+
+    if (op.delta &lt; 0) {
+      const released = -op.delta;
+      const destroyedAmt = released * (DESTROYED_BY_SOURCE[op.id] || 0);
+      totalDestroyed += destroyedAmt;
+      if (destroyedAmt &gt; 0) destroyedContribs.push({ color: op.color, amount: destroyedAmt });
+      const toDistribute = released - destroyedAmt;
+      distributeWeighted(receiverWeightsForOutflow(op.id), toDistribute, 1, op.id, val, contributions, op.color);
+    } else if (op.delta &gt; 0) {
+      distributeWeighted(funderWeightsForInflow(op.id), op.delta, -1, op.id, val, contributions, op.color);
+    }
+  });
+
+  ITEMS.forEach(function(id) { val[id] = Math.max(0, val[id]); });
+  return { val: val, contributions: contributions, totalDestroyed: totalDestroyed, destroyedContribs: destroyedContribs };
+}
+
+function render() {
+  const result = computeValues(operations);
+  const val = result.val;
+  const contributions = result.contributions;
+  const totalDestroyed = result.totalDestroyed;
+
+  // global scale: %-width per $T, anchored so the largest base item = 100%
+  const GLOBAL_SCALE = 100 / BASE[MAX_BASE_ID];
+
+  ITEMS.forEach(function(id) {
+    const row = document.querySelector('.sim-row[data-id=&quot;' + id + '&quot;]');
+    const base = BASE[id];
+    const current = val[id];
+    const delta = current - base;
+
+    const barBase = document.getElementById('barbase-' + id);
+    const barChange = document.getElementById('barchange-' + id);
+    const handle = document.getElementById('handle-' + id);
+    const valEl = document.getElementById('val-' + id);
+
+    // pick the color of whichever operation contributed the LARGEST absolute amount to this item
+    let color = null;
+    const items_contribs = contributions[id];
+    if (items_contribs.length &gt; 0) {
+      let maxAbs = -1;
+      items_contribs.forEach(function(c) {
+        if (Math.abs(c.amount) &gt; maxAbs) {
+          maxAbs = Math.abs(c.amount);
+          color = c.color;
+        }
+      });
+    }
+
+    if (delta &gt;= 0) {
+      // grew: base segment stays full original width, change segment extends to the right in op color
+      barBase.style.width = (base * GLOBAL_SCALE) + '%';
+      barBase.style.left = '0%';
+      barChange.style.left = (base * GLOBAL_SCALE) + '%';
+      barChange.style.width = (delta * GLOBAL_SCALE) + '%';
+      barChange.style.background = color || 'transparent';
+      handle.style.left = (current * GLOBAL_SCALE) + '%';
+    } else {
+      // shrank: base segment shortens to `current`, change segment fills the gap up to original base, in op color
+      barBase.style.width = (current * GLOBAL_SCALE) + '%';
+      barBase.style.left = '0%';
+      barChange.style.left = (current * GLOBAL_SCALE) + '%';
+      barChange.style.width = (Math.abs(delta) * GLOBAL_SCALE) + '%';
+      barChange.style.background = color || 'transparent';
+      handle.style.left = (current * GLOBAL_SCALE) + '%';
+    }
+
+    const pctOfGrand = current / GRAND_TOTAL * 100;
+    let deltaTag = '';
+    if (Math.abs(delta) &gt; 0.05) {
+      deltaTag = ' &lt;span style=&quot;font-family:var(--mono); font-size:10px; color:' + (color || 'var(--sub)') + ';&quot;&gt;(' +
+        (delta &gt; 0 ? '+' : '') + fmtT(delta) + 'T)&lt;/span&gt;';
+    }
+    const pctLabel = (id === 'bank-money') ? '' : ' &lt;span class=&quot;pct&quot;&gt;' + pctOfGrand.toFixed(1) + '%&lt;/span&gt;';
+    valEl.innerHTML = '$' + fmtT(current) + 'T（¥' + fmtJPY(current) + '）' + deltaTag + pctLabel;
+
+    row.classList.toggle('active-drag', Math.abs(delta) &gt; 0.05);
+  });
+
+  // group subtotals (equity / bond / other) -- excludes bank
+  const groupSum = { equity: 0, bond: 0, other: 0 };
+  ITEMS.forEach(function(id) {
+    if (GROUP[id] === 'bank') return;
+    groupSum[GROUP[id]] += val[id];
+  });
+  document.getElementById('equity-total').textContent = '$' + fmtT(groupSum.equity) + 'T（約¥' + fmtJPY(groupSum.equity) + '）';
+  document.getElementById('bond-total').textContent = '$' + fmtT(groupSum.bond) + 'T（約¥' + fmtJPY(groupSum.bond) + '）';
+  document.getElementById('other-total').textContent = '$' + fmtT(groupSum.other) + 'T（約¥' + fmtJPY(groupSum.other) + '）';
+  document.getElementById('bank-total').textContent = '$' + fmtT(val['bank-money']) + 'T（約¥' + fmtJPY(val['bank-money']) + '）';
+
+  // ② total = everything except bank-money
+  const marketTotal = ITEMS.reduce(function(s, id) { return GROUP[id] === 'bank' ? s : s + val[id]; }, 0);
+  const bankTotal = val['bank-money'];
+  const grandTotal = marketTotal + bankTotal;
+
+  document.getElementById('val-total-market').innerHTML =
+    '$' + fmtT(marketTotal) + 'T（¥' + fmtJPY(marketTotal) + '） &lt;span class=&quot;pct&quot;&gt;' + (marketTotal / grandTotal * 100).toFixed(0) + '%&lt;/span&gt;';
+
+  // sync ① split-bar at the top
+  document.getElementById('bank-value').textContent = '$' + fmtT(bankTotal) + 'T';
+  document.getElementById('bank-jpy').textContent = '約¥' + fmtJPY(bankTotal) + '（' + Math.round(bankTotal * 160).toLocaleString() + '兆円）';
+  document.getElementById('mkt-value').textContent = '$' + fmtT(marketTotal) + 'T';
+  document.getElementById('mkt-jpy').textContent = '約¥' + fmtJPY(marketTotal) + '（' + Math.round(marketTotal * 160).toLocaleString() + '兆円）';
+  document.getElementById('bank-pct').textContent = (bankTotal / grandTotal * 100).toFixed(0) + '%';
+  document.getElementById('mkt-pct').textContent = (marketTotal / grandTotal * 100).toFixed(0) + '%';
+  document.getElementById('bank-row').style.flex = (bankTotal / grandTotal * 100);
+  document.getElementById('mkt-row').style.flex = (marketTotal / grandTotal * 100);
+
+  // sync the flow-arrow &quot;この◯%を内訳すると&quot; text and the ③ title amount with current state
+  document.getElementById('flow-pct').textContent = (marketTotal / grandTotal * 100).toFixed(0);
+  document.getElementById('block-title-amount').textContent = fmtT(marketTotal) + '兆ドル';
+
+  // destroyed-value row (pure valuation loss, doesn't land anywhere)
+  const destroyedRow = document.getElementById('row-destroyed');
+  if (totalDestroyed &gt; 0.05) {
+    destroyedRow.style.display = '';
+    const GLOBAL_SCALE2 = 100 / BASE[MAX_BASE_ID];
+    document.getElementById('bar-destroyed').style.width = Math.min(100, totalDestroyed * GLOBAL_SCALE2) + '%';
+    document.getElementById('val-destroyed').textContent = '$' + fmtT(totalDestroyed) + 'T（¥' + fmtJPY(totalDestroyed) + '）　市場から消失';
+  } else {
+    destroyedRow.style.display = 'none';
+  }
+}
+
+function resetSimulation() {
+  operations = [];
+  opCounter = 0;
+  render();
+}
+
+// drag handling
+function setupDrag(id) {
+  const track = document.getElementById('track-' + id);
+  const handle = document.getElementById('handle-' + id);
+  let dragging = false;
+  let currentOp = null;
+
+  function startDrag(clientX) {
+    dragging = true;
+    const color = OP_COLORS[opCounter % OP_COLORS.length];
+    opCounter++;
+    currentOp = { id: id, delta: 0, color: color };
+    operations.push(currentOp);
+  }
+
+  function moveDrag(clientX) {
+    if (!dragging) return;
+    const rect = track.getBoundingClientRect();
+    // allow dragging up to 1.5x the track width to the right, so items can grow past
+    // the current max (e.g. us-equity growing beyond its own 100%-reference width)
+    const xPct = Math.max(0, Math.min(1.5, (clientX - rect.left) / rect.width));
+    const GLOBAL_SCALE = 100 / BASE[MAX_BASE_ID]; // %-per-$T, anchored to the largest-base item = 100%
+    const targetVal = (xPct * 100) / GLOBAL_SCALE;
+    currentOp.delta = targetVal - BASE[id];
+    render();
+  }
+
+  function endDrag() {
+    dragging = false;
+    currentOp = null;
+  }
+
+  handle.addEventListener('mousedown', function(e) { e.preventDefault(); startDrag(e.clientX); });
+  track.addEventListener('mousedown', function(e) {
+    if (e.target === handle) return;
+    startDrag(e.clientX);
+    moveDrag(e.clientX);
+  });
+  window.addEventListener('mousemove', function(e) { if (dragging) moveDrag(e.clientX); });
+  window.addEventListener('mouseup', endDrag);
+
+  handle.addEventListener('touchstart', function(e) { startDrag(e.touches[0].clientX); }, {passive:true});
+  track.addEventListener('touchstart', function(e) {
+    if (e.target === handle) return;
+    startDrag(e.touches[0].clientX);
+    moveDrag(e.touches[0].clientX);
+  }, {passive:true});
+  window.addEventListener('touchmove', function(e) { if (dragging) moveDrag(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener('touchend', endDrag);
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  ITEMS.forEach(function(id) {
+    const barBase = document.getElementById('barbase-' + id);
+    barBase.dataset.initWidth = parseFloat(barBase.style.width);
+    setupDrag(id);
+  });
+  render();
+});
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+
+
+"></iframe>
 </div>
 
 <div id="statsContent">
@@ -2416,3 +3688,4 @@ if(flowCurrentDate)loadFlowSnapshot(flowCurrentDate);else updateCashFlow();
 fetchFlowDaily();
 
 </script>
+
