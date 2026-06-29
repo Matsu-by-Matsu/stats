@@ -536,8 +536,9 @@ h1 em{color:var(--blue);font-style:normal}
   .breakdown-group-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
   .bd-row {
-    display: grid; grid-template-columns: 132px 1fr 198px;
+    display: grid; grid-template-columns: 132px minmax(260px, 1fr) 252px;
     align-items: center; gap: 14px; margin-bottom: 7px;
+    min-height: 22px; height: 22px;
   }
   .bd-name { font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
   .bd-track { height: 22px; background: #ece8dc; border-radius: 3px; overflow: hidden; position: relative; cursor: ew-resize; }
@@ -562,21 +563,41 @@ h1 em{color:var(--blue);font-style:normal}
     background: rgba(0,0,0,0.25);
     border-radius: 2px;
   }
-  .sim-row.active-drag { background: rgba(0,0,0,0.03); border-radius: 4px; }
+  .sim-row.active-drag { background: rgba(0,0,0,0.03); border-radius: 4px; min-height: 22px; }
   .bd-value {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 9.5px;
     color: var(--ink);
     text-align: right;
-    display: grid;
-    grid-template-columns: minmax(0,1fr) 42px;
-    gap: 8px;
-    align-items: baseline;
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    align-items: center;
+    white-space: nowrap;
+    line-height: 1;
+    overflow: hidden;
+    min-width: 0;
+    height: 22px;
+    max-height: 22px;
+  }
+  .bd-value .main-val {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+  .bd-value .delta-val {
+    flex: 0 0 auto;
+    font-size: 8.8px;
+    white-space: nowrap;
   }
   .bd-value .pct {
     color: var(--sub);
-    margin-left: 0;
+    flex: 0 0 32px;
+    margin-left: 2px;
     text-align: right;
+    white-space: nowrap;
   }
 
   /* expandable rows */
@@ -1543,11 +1564,11 @@ function render() {
     const pctOfGrand = current / GRAND_TOTAL * 100;
     let deltaTag = '';
     if (Math.abs(delta) &gt; 0.05) {
-      deltaTag = ' &lt;span style=&quot;font-family:var(--mono); font-size:10px; color:' + (color || 'var(--sub)') + ';&quot;&gt;(' +
+      deltaTag = '&lt;span class=&quot;delta-val&quot; style=&quot;color:' + (color || 'var(--sub)') + ';&quot;&gt;(' +
         (delta &gt; 0 ? '+' : '') + fmtT(delta) + 'T)&lt;/span&gt;';
     }
-    const pctLabel = (id === 'bank-money') ? '' : ' &lt;span class=&quot;pct&quot;&gt;' + pctOfGrand.toFixed(1) + '%&lt;/span&gt;';
-    valEl.innerHTML = '$' + fmtT(current) + 'T（¥' + fmtJPY(current) + '）' + deltaTag + pctLabel;
+    const pctLabel = (id === 'bank-money') ? '' : '&lt;span class=&quot;pct&quot;&gt;' + pctOfGrand.toFixed(1) + '%&lt;/span&gt;';
+    valEl.innerHTML = '&lt;span class=&quot;main-val&quot;&gt;$' + fmtT(current) + 'T（¥' + fmtJPY(current) + '）&lt;/span&gt;' + deltaTag + pctLabel;
 
     row.classList.toggle('active-drag', Math.abs(delta) &gt; 0.05);
   });
@@ -1569,7 +1590,7 @@ function render() {
   const grandTotal = marketTotal + bankTotal;
 
   document.getElementById('val-total-market').innerHTML =
-    '$' + fmtT(marketTotal) + 'T（¥' + fmtJPY(marketTotal) + '） &lt;span class=&quot;pct&quot;&gt;' + (marketTotal / grandTotal * 100).toFixed(0) + '%&lt;/span&gt;';
+    '&lt;span class=&quot;main-val&quot;&gt;$' + fmtT(marketTotal) + 'T（¥' + fmtJPY(marketTotal) + '）&lt;/span&gt;&lt;span class=&quot;pct&quot;&gt;' + (marketTotal / grandTotal * 100).toFixed(0) + '%&lt;/span&gt;';
 
   // sync ① split-bar at the top
   document.getElementById('bank-value').textContent = '$' + fmtT(bankTotal) + 'T';
@@ -2583,7 +2604,133 @@ function representativeSeriesData(s){
 function isTimeSeriesData(data){
   const keys=Object.keys(data||{});
   if(!keys.length) return false;
-  return keys.every(k=>/^\d{4}(-\d{2})?$/.test(String(k)));
+  return keys.every(k=>/^\d{4}(-\d{2})?(-\d{2})?$/.test(String(k)));
+}
+
+const LIVE_STORAGE_KEY='stats.liveDailySeries.yahoo.v2';
+const LIVE_SYMBOLS={
+  stocks:{nikkei:'^N225',topix:'^TOPX',reit_idx:'1343.T'},
+  world_stocks:{sp500:'^GSPC',nasdaq:'^IXIC',nikkei:'^N225',dax:'^GDAXI',ftse:'^FTSE',hangseng:'^HSI'},
+  world_fx:{usdjpy:'JPY=X',eurusd:'EURUSD=X',gbpusd:'GBPUSD=X',usdcny:'CNY=X',usdkrw:'KRW=X',usdinr:'INR=X'},
+  world_commodities:{gold:'GC=F',wti:'CL=F',brent:'BZ=F',silver:'SI=F',copper:'HG=F',natgas:'NG=F'}
+};
+let liveCacheLoaded=false;
+let liveFetchInFlight=false;
+const liveAutoTried={};
+
+function loadLiveSeriesCache(){
+  if(liveCacheLoaded) return;
+  liveCacheLoaded=true;
+  let cache={};
+  try{cache=JSON.parse(localStorage.getItem(LIVE_STORAGE_KEY)||'{}')||{};}catch(e){cache={};}
+  [DATA,WORLD_DATA].forEach(scope=>{
+    Object.entries(scope||{}).forEach(([catKey,d])=>{
+      Object.entries(d.series||{}).forEach(([k,s])=>{
+        const cached=cache[catKey]?.[k];
+        if(cached?.dailyData) s.dailyData=cached.dailyData;
+        if(cached?.fetchedAt) s.fetchedAt=cached.fetchedAt;
+      });
+    });
+  });
+}
+
+function saveLiveSeriesCache(){
+  const cache={};
+  [DATA,WORLD_DATA].forEach(scope=>{
+    Object.entries(scope||{}).forEach(([catKey,d])=>{
+      Object.entries(d.series||{}).forEach(([k,s])=>{
+        if(s.dailyData){
+          if(!cache[catKey]) cache[catKey]={};
+          cache[catKey][k]={dailyData:s.dailyData,fetchedAt:s.fetchedAt||''};
+        }
+      });
+    });
+  });
+  try{localStorage.setItem(LIVE_STORAGE_KEY,JSON.stringify(cache));}catch(e){}
+}
+
+function isDateKey(k){ return /^\d{4}-\d{2}-\d{2}$/.test(String(k)); }
+function isMonthKey(k){ return /^\d{4}-\d{2}$/.test(String(k)); }
+function dateLikeKey(k){ return isDateKey(k) || isMonthKey(k); }
+function keyDate(k){
+  const s=String(k);
+  if(isDateKey(s)) return new Date(s+'T00:00:00');
+  if(isMonthKey(s)) return new Date(s+'-01T00:00:00');
+  return new Date(Number(s),11,31);
+}
+function latestDataKey(data){
+  return Object.keys(data||{}).sort((a,b)=>keyDate(a)-keyDate(b)).slice(-1)[0];
+}
+function filterByPeriod(data){
+  const keys=Object.keys(data||{}).sort((a,b)=>keyDate(a)-keyDate(b));
+  if(!keys.length) return {};
+  const latest=keyDate(keys[keys.length-1]);
+  const start=new Date(latest);
+  start.setFullYear(start.getFullYear()-period);
+  start.setDate(start.getDate()+1);
+  const out={};
+  keys.forEach(k=>{ if(keyDate(k)>=start) out[k]=data[k]; });
+  return out;
+}
+function monthEndData(dailyData){
+  const out={};
+  Object.keys(dailyData||{}).sort().forEach(k=>{
+    if(!isDateKey(k)) return;
+    out[k.slice(0,7)]=dailyData[k];
+  });
+  return out;
+}
+function marketDisplayMode(){
+  return period<=1?'daily':'monthEnd';
+}
+function displaySeriesData(s,d){
+  loadLiveSeriesCache();
+  const rep=representativeSeriesData(s);
+  if(d?.isLive && s.dailyData && Object.keys(s.dailyData).length){
+    const daily=filterByPeriod(s.dailyData);
+    const useData=marketDisplayMode()==='daily'?daily:monthEndData(daily);
+    return {data:useData,label:rep.label,sourceName:marketDisplayMode()==='daily'?'日次終値':'月末終値'};
+  }
+  return {data:filterYears(rep.data),label:rep.label,sourceName:rep.sourceName};
+}
+function hasDailyForKeys(d,keys){
+  loadLiveSeriesCache();
+  return keys.some(k=>d.series[k]?.dailyData && Object.keys(d.series[k].dailyData).length);
+}
+function liveHint(d,keys){
+  if(!d.isLive) return '';
+  if(hasDailyForKeys(d,keys)){
+    return marketDisplayMode()==='daily'?'日次終値で表示':'月末終値で表示';
+  }
+  return '年次固定値を暫定表示。最新データ取得後は1年=日次、2年以上=月末終値に切替';
+}
+
+async function fetchLiveCategory(catKey,d){
+  const symbols=LIVE_SYMBOLS[catKey];
+  if(!symbols) throw new Error('LIVEシンボル未定義');
+  const entries=Object.entries(symbols).filter(([k])=>d.series[k]);
+  const fetchedAt=new Date().toLocaleDateString('ja-JP');
+  await Promise.all(entries.map(async ([k,symbol])=>{
+    const arr=await fetchYahooSeries(symbol);
+    if(!arr.length) throw new Error(symbol+' has no data');
+    const daily={};
+    arr.forEach(p=>{ daily[p.date]=p.close; });
+    d.series[k].dailyData=daily;
+    d.series[k].fetchedAt=fetchedAt;
+  }));
+  lastUpdated[catKey]=fetchedAt+' Yahoo Finance日次終値';
+  saveLiveSeriesCache();
+}
+
+function autoFetchLiveIfNeeded(d,keys){
+  if(!d.isLive || liveFetchInFlight || hasDailyForKeys(d,keys) || liveAutoTried[cat]) return;
+  if(!LIVE_SYMBOLS[cat]) return;
+  liveAutoTried[cat]=true;
+  liveFetchInFlight=true;
+  fetchLiveCategory(cat,d).then(()=>{
+    renderMetrics();
+    renderChart();
+  }).catch(()=>{}).finally(()=>{liveFetchInFlight=false;});
 }
 
 function dataByScope(scope){
@@ -2988,6 +3135,7 @@ function setPeriod(p){
 }
 
 function filterYears(data){
+  if(Object.keys(data||{}).some(dateLikeKey)) return filterByPeriod(data);
   const keys=Object.keys(data).sort();
   const years=keys.map(k=>parseFloat(k)).filter(Number.isFinite);
   const latest=years.length?Math.max(...years):2026;
@@ -3688,4 +3836,6 @@ if(flowCurrentDate)loadFlowSnapshot(flowCurrentDate);else updateCashFlow();
 fetchFlowDaily();
 
 </script>
+
+
 
