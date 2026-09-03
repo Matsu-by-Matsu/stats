@@ -3127,9 +3127,51 @@ function renderPrefPanel(){
     html+='<button class="pchip'+(on?' on':'')+'" style="'+bg+'" onclick="togglePrefIdx('+i+')">'+p+'</button>';
   });
   document.getElementById('prefChips').innerHTML=html;
-  document.getElementById('prefHint').textContent=selectedPrefs.length>=maxSel?'上限'+maxSel+'件に達しました':'クリックで選択・解除。複数選択で比較。';
+  document.getElementById('prefHint').textContent=d.prefType==='tourism' ? '都道府県をクリックすると、宿泊者数の推移が近い2〜3県を自動で比較対象にします。' : (selectedPrefs.length>=maxSel?'上限'+maxSel+'件に達しました':'クリックで選択・解除。複数選択で比較。');
 }
 
+function comparablePrefEntries(pool,name){
+  return Object.entries(pool[name]||{})
+    .filter(([k,v])=>/^\d{4}$/.test(String(k)) && typeof v==='number' && Number.isFinite(v) && v>0)
+    .sort((a,b)=>Number(a[0])-Number(b[0]));
+}
+function prefSimilarityScore(pool,baseName,targetName){
+  const baseEntries=comparablePrefEntries(pool,baseName);
+  const targetEntries=comparablePrefEntries(pool,targetName);
+  const baseMap=Object.fromEntries(baseEntries);
+  const targetMap=Object.fromEntries(targetEntries);
+  const years=Object.keys(baseMap).filter(y=>targetMap[y]!=null).sort();
+  if(years.length<4) return Infinity;
+  const b0=baseMap[years[0]], t0=targetMap[years[0]];
+  if(!b0 || !t0) return Infinity;
+  let shape=0, momentum=0, momentumCount=0;
+  years.forEach(y=>{
+    shape+=Math.abs((baseMap[y]/b0)-(targetMap[y]/t0));
+  });
+  for(let i=1;i<years.length;i++){
+    const y=years[i], prev=years[i-1];
+    const bg=(baseMap[y]-baseMap[prev])/baseMap[prev];
+    const tg=(targetMap[y]-targetMap[prev])/targetMap[prev];
+    if(Number.isFinite(bg)&&Number.isFinite(tg)){
+      momentum+=Math.abs(bg-tg);
+      momentumCount++;
+    }
+  }
+  const latest=years[years.length-1];
+  const levelPenalty=Math.abs(Math.log(targetMap[latest]/baseMap[latest]))*0.12;
+  return (shape/years.length) + (momentumCount?momentum/momentumCount:0) + levelPenalty;
+}
+function nearestPrefsForSelection(d,baseName,limit=3){
+  const pool=activePrefPool(d);
+  const primary=d.prefType==='world'?'世界':(d.prefType==='tourism'?'全国（合計）':'全国');
+  return Object.keys(pool)
+    .filter(name=>name!==baseName && name!==primary && pool[name] && Object.keys(pool[name]).length)
+    .map(name=>({name,score:prefSimilarityScore(pool,baseName,name)}))
+    .filter(x=>Number.isFinite(x.score))
+    .sort((a,b)=>a.score-b.score || a.name.localeCompare(b.name,'ja'))
+    .slice(0,limit)
+    .map(x=>x.name);
+}
 function togglePrefIdx(i){
   const p=window._prefList[i];
   togglePref(p);
@@ -3146,6 +3188,9 @@ function togglePref(p){
   } else {
     if(isAll){
       selectedPrefs=[primary];
+    } else if(d.prefType==='tourism'){
+      const nearest=nearestPrefsForSelection(d,p,3);
+      selectedPrefs=[p].concat(nearest).slice(0,maxSel);
     } else {
       selectedPrefs=selectedPrefs.filter(function(x){return x!==primary;});
       if(selectedPrefs.length>=maxSel) return;
