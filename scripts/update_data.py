@@ -16,7 +16,9 @@ NOW = dt.datetime.now(dt.timezone.utc)
 
 # ---- 取得対象(index.htmlのLIVE_SYMBOLSと同じ) ----
 SYMBOLS = {
-  'stocks': {'nikkei': '^N225', 'reit_idx': '1343.T'},   # TOPIXはYahooに存在しない(下のNO_SOURCE参照)
+  # TOPIX指数そのものはYahooにないため、連動ETF(1348)を「ETF」と明記して載せる
+  # 1306と1475はYahooの過去データに10分の1になる誤りがあるので使わない
+  'stocks': {'nikkei': '^N225', 'topix': '1348.T', 'reit_idx': '1343.T'},
   'rates': {'us_3m': '^IRX', 'us_5y': '^FVX', 'us_10y': '^TNX', 'us_30y': '^TYX'},
   'world_stocks': {'sp500': '^GSPC', 'nasdaq': '^IXIC', 'nikkei': '^N225', 'dax': '^GDAXI', 'ftse': '^FTSE',
                    'hangseng': '^HSI', 'dow': '^DJI', 'russell2000': '^RUT', 'eurostoxx50': '^STOXX50E',
@@ -28,9 +30,8 @@ SYMBOLS = {
                         'natgas': 'NG=F', 'platinum': 'PL=F', 'corn': 'ZC=F', 'wheat': 'ZW=F', 'soybeans': 'ZS=F'},
 }
 FRED_RATES = {'us_ff': 'DFF', 'eu_policy': 'ECBMRRFR'}   # 米FF実効金利、ECB主要リファイナンス金利
-# 無料で使える公式の日次データが見つからない指標。推定や別物での代用はせず「取得失敗」と表示する
-NO_SOURCE = [{'id': 'stocks.topix', 'symbol': 'TOPIX', 'error': '無料の公式日次データがないため未取得'}]
 STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 300}   # 最新日がこの日数より古い系列は「古いまま」と報告
+REVERT_DAYS = 5        # この営業日数以内に元の水準へ戻る急変はデータの誤りとして扱う
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
 
@@ -74,7 +75,7 @@ def compress(daily):
 def validate(daily, label):
     """明らかな異常を除く。除いた件数も返す。
     - 非数は除外。0以下は金利以外で除外(日本国債などのマイナス金利は実在する)
-    - 前日比35%超は、翌日に元の水準へ戻る一点だけの値と、翌日の裏付けがない最新値を除外
+    - 前日比35%超は、数日以内に元の水準へ戻る値と、翌日の裏付けがない最新値を除外
       (水準が本当に変わった場合は採用する。古い値を基準に以後を全部捨てないため)
     """
     is_rate = label.startswith('rates')
@@ -88,9 +89,9 @@ def validate(daily, label):
         return dict(vals), bad
     clean, prev = {}, None
     for i, (k, v) in enumerate(vals):
-        nxt = vals[i + 1][1] if i + 1 < len(vals) else None
         if prev is not None and abs(v / prev - 1) > MAX_JUMP:
-            if nxt is None or abs(nxt / prev - 1) <= MAX_JUMP:
+            later = vals[i + 1:i + 1 + REVERT_DAYS]
+            if not later or any(abs(x / prev - 1) <= MAX_JUMP for _, x in later):
                 bad += 1; continue
         clean[k] = v; prev = v
     return clean, bad
@@ -328,7 +329,7 @@ def update_stats(put, errors):
 def update_market():
     old = load('market.json', {'series': {}})
     series = old.get('series', {})
-    errors = list(NO_SOURCE)
+    errors = []
     def put(cat, key, symbol, daily, source, freq='daily'):
         # 公的統計は負の値(物価の下落、貿易赤字)や大きな変動も実在するので、飛び値の判定はしない
         daily, bad = validate(daily, cat if freq == 'daily' else 'rates')
@@ -384,7 +385,7 @@ def update_flow():
 def gn(q, hl, gl, ceid):
     return 'https://news.google.com/rss/search?q=%s&hl=%s&gl=%s&ceid=%s' % (urllib.parse.quote(q), hl, gl, ceid)
 JA = ('ja', 'JP', 'JP:ja'); EN = ('en-US', 'US', 'US:en'); AU = ('en-AU', 'AU', 'AU:en'); KO = ('ko', 'KR', 'KR:ko')
-def F(q, loc, cat): return {'url': gn(q, *loc), 'category': cat}
+def F(q, loc, cat): return {'url': gn(q, *loc), 'aim': cat}   # aimは検索の狙い。記事の分類は見出しで決める
 REGIONS = {
  'jp': [F('site:nikkei.com when:2d', JA, '経済・金融'), F('site:nikkei.com 市場 when:2d', JA, 'マーケット'),
         F('site:nikkei.com 不動産 when:7d', JA, '不動産・REIT'), F('site:nikkei.com 政治 when:2d', JA, '政治・外交'),
@@ -412,8 +413,36 @@ REGIONS = {
             F('geopolitics when:2d', EN, '政治・外交')],
 }
 PER_REGION = 60
+PER_CATEGORY = 15      # 1分類が枠を埋め尽くさないよう、まず分類ごとにこの件数まで選ぶ(残りは新しい順)
+OTHER_LIMIT = 5        # 「その他」を優先して選ぶ上限
+with open(os.path.join(ROOT, 'scripts', 'news_rules.json'), encoding='utf-8') as _f:
+    NEWS_RULES = [(r['category'], re.compile(r['local'] + '|(?<![A-Za-z])(?:' + r['en'] + ')(?![A-Za-z])', re.I))
+                  for r in json.load(_f)]
 
-def parse_feed(raw, cat):
+def classify(headline):
+    """見出しの語で分類する。上から順に判定し、どれにも当たらなければ「その他」。"""
+    text = unicodedata.normalize('NFKC', headline)
+    for category, pattern in NEWS_RULES:
+        if pattern.search(text):
+            return category
+    return 'その他'
+
+def pick_news(items):
+    """新しい順の記事から、分類が偏らないように選ぶ。"""
+    picked, rest, count = [], [], {}
+    for n in items:
+        c = n['category']
+        limit = OTHER_LIMIT if c == 'その他' else PER_CATEGORY
+        if count.get(c, 0) < limit:
+            count[c] = count.get(c, 0) + 1
+            picked.append(n)
+        else:
+            rest.append(n)
+    chosen = picked[:PER_REGION]
+    chosen += [n for n in rest if n['category'] != 'その他'][:PER_REGION - len(chosen)]
+    return sorted(chosen, key=lambda x: x['time'], reverse=True)
+
+def parse_feed(raw):
     root = ET.fromstring(raw)
     out = []
     for it in root.iter('item'):
@@ -428,7 +457,7 @@ def parse_feed(raw, cat):
         try: t = parsedate_to_datetime(it.findtext('pubDate')).astimezone(dt.timezone.utc)
         except Exception: continue
         if not title or not link.startswith('http') or not source: continue
-        out.append({'headline': title, 'source': source, 'url': link, 'category': cat,
+        out.append({'headline': title, 'source': source, 'url': link, 'category': classify(title),
                     'time': t.strftime('%Y-%m-%dT%H:%MZ')})
     return out
 
@@ -439,7 +468,7 @@ def update_news():
         items, ok = [], 0
         for f in feeds:
             try:
-                items += parse_feed(get(f['url'], timeout=30), f['category']); ok += 1
+                items += parse_feed(get(f['url'], timeout=30)); ok += 1
             except Exception as e:
                 errors.append({'id': f'news.{key}', 'url': f['url'][:100], 'error': str(e)[:120]})
             time.sleep(0.5)
@@ -451,7 +480,7 @@ def update_news():
         if ok == 0 or not uniq:
             regions[key] = old.get('regions', {}).get(key, [])   # 全滅時のみ前回を保持
         else:
-            regions[key] = uniq[:PER_REGION]
+            regions[key] = pick_news(uniq)
     save('news.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'regions': regions})
     return errors
 

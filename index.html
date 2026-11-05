@@ -2289,12 +2289,12 @@ const DATA={
     isLive:true,unverified:true,qualityNote:'手入力の長期系列が混在。最新値取得後のみ参考表示。',
     metrics:[
       {key:'nikkei',label:'日経平均（円）'},
-      {key:'topix',label:'TOPIX'},
+      {key:'topix',label:'TOPIX連動ETF(1348)'},
       {key:'reit_idx',label:'REIT ETF(1343)'},
     ],
     series:{
       nikkei:{label:'日経平均',unit:'円',data:{2005:16111,2006:17226,2007:15308,2008:8860,2009:10546,2010:10229,2011:8455,2012:10395,2013:16291,2014:17451,2015:19034,2016:19114,2017:22765,2018:20015,2019:23657,2020:27444,2021:28792,2022:26095,2023:33465,2024:39894,2025:39503}},
-      topix:{label:'TOPIX',unit:'pt',dailyFailed:true,data:{2005:1649,2006:1681,2007:1476,2008:860,2009:907,2010:898,2011:729,2012:859,2013:1302,2014:1408,2015:1547,2016:1519,2017:1817,2018:1494,2019:1721,2020:1804,2021:1992,2022:1891,2023:2336,2024:2697,2025:2770}},
+      topix:{label:'TOPIX連動ETF(1348)',unit:'円',dailyFailed:true,source:'https://finance.yahoo.com/quote/1348.T/',srcLbl:'Yahoo Finance 1348.T',definition:'<b>定義:</b> TOPIXに連動するETF（MAXIS トピックス上場投信、1348）の市場価格です。TOPIX指数そのものの値ではありません。無料で使える公式の指数データが見つからないため、代わりに表示しています。',data:{}},
       reit_idx:{label:'REIT ETF(1343・東証REIT指数連動)',unit:'円',data:{2005:1563,2006:1942,2007:2212,2008:846,2009:964,2010:1109,2011:862,2012:1106,2013:1605,2014:1816,2015:1915,2016:1768,2017:1797,2018:1653,2019:2010,2020:1609,2021:1971,2022:1754,2023:1831,2024:1788,2025:1820}}
     }
   },
@@ -2497,6 +2497,18 @@ let cat='population';
 let activeKey=null;
 // 自動更新データの周期ごとの呼び方
 const FREQ={daily:{name:'日次',prev:'前営業日',badge:'LIVE'},monthly:{name:'月次',prev:'前月',badge:'月次'},quarterly:{name:'四半期',prev:'前期',badge:'四半期'}};
+function isTimeKey(k){return /^\d{4}(-\d{2}(-\d{2})?)?$/.test(String(k));}
+function timeLabel(ms,withDay){
+  const d=new Date(ms),m=String(d.getMonth()+1).padStart(2,'0');
+  return d.getFullYear()+'-'+m+(withDay?'-'+String(d.getDate()).padStart(2,'0'):'');
+}
+function timeAxis(datasets){
+  const xs=datasets.flatMap(d=>d.data.map(p=>p.x));
+  return {type:'linear',min:Math.min(...xs),max:Math.max(...xs),grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:11},color:'#888',maxRotation:50,maxTicksLimit:12,callback:v=>timeLabel(v,false)}};
+}
+function timePoints(data){
+  return Object.keys(data).sort((a,b)=>keyDate(a)-keyDate(b)).map(k=>({x:keyDate(k).getTime(),y:data[k]}));
+}
 function fmtPeriodKey(k,freq){
   if(freq!=='quarterly') return k;
   const y=String(k).slice(0,4),m=+String(k).slice(5,7);
@@ -2716,7 +2728,7 @@ if(WORLD_DATA.world_commodities){
 }
 
 const LIVE_SYMBOLS={
-  stocks:{nikkei:'^N225',topix:'^TOPX',reit_idx:'1343.T'},
+  stocks:{nikkei:'^N225',topix:'1348.T',reit_idx:'1343.T'},
   rates:{us_3m:'^IRX',us_5y:'^FVX',us_10y:'^TNX',us_30y:'^TYX'},
   world_stocks:{sp500:'^GSPC',nasdaq:'^IXIC',nikkei:'^N225',dax:'^GDAXI',ftse:'^FTSE',hangseng:'^HSI',dow:'^DJI',russell2000:'^RUT',eurostoxx50:'^STOXX50E',cac40:'^FCHI',shanghai:'000001.SS',sensex:'^BSESN'},
   world_fx:{usdjpy:'JPY=X',eurusd:'EURUSD=X',gbpusd:'GBPUSD=X',usdcny:'CNY=X',usdkrw:'KRW=X',usdinr:'INR=X',audusd:'AUDUSD=X',usdcad:'CAD=X',usdchf:'CHF=X',usdmxn:'MXN=X',usdbrl:'BRL=X',usdtry:'TRY=X'},
@@ -2931,7 +2943,8 @@ function addCrossCompare(){
   }else if(s.countryData){
     const rep=representativeSeriesData(s);
     if(rep.sourceName) additions.push({scope:statScope,cat,key:activeKey,sourceName:rep.sourceName,label:`${baseLabel}（${rep.sourceName}）`});
-  }else if(s.data && Object.keys(s.data).length){
+    else if(Object.keys(rep.data||{}).length) additions.push({scope:statScope,cat,key:activeKey,label:baseLabel});
+  }else if(Object.keys(s.data||{}).length || Object.keys(s.dailyData||{}).length){
     additions.push({scope:statScope,cat,key:activeKey,label:baseLabel});
   }
   if(!additions.length){
@@ -2999,6 +3012,7 @@ function renderCrossCompare(forceShow=true){
   const allX=new Set();
   prepared.forEach(item=>Object.keys(item.data).forEach(x=>allX.add(x)));
   const labels=[...allX].sort();
+  const crossTime=labels.every(isTimeKey);
   const baseUnit=prepared[0].unit||'';
   const medians=prepared.map(item=>{
     const vals=Object.values(item.data).filter(v=>typeof v==='number'&&Number.isFinite(v)).map(Math.abs).sort((a,b)=>a-b);
@@ -3009,7 +3023,7 @@ function renderCrossCompare(forceShow=true){
     const col=C[i%C.length];
     const scaleRatio=medians[i] && primaryMedian ? Math.max(medians[i],primaryMedian)/Math.max(1e-9,Math.min(medians[i],primaryMedian)) : 1;
     const yAxis=!indexMode && i>0 && (item.unit!==baseUnit || scaleRatio>8) ? 'y2' : 'y';
-    return {label:item.label,data:labels.map(x=>item.data[x]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:labels.length>120?0:3,tension:labels.length>120?0:0.25,spanGaps:true,yAxisID:yAxis,fill:false};
+    return {label:item.label,data:crossTime?timePoints(item.data):labels.map(x=>item.data[x]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:labels.length>120?0:3,tension:labels.length>120?0:0.25,spanGaps:true,yAxisID:yAxis,fill:false};
   });
   document.getElementById('crossLeg').innerHTML=datasets.map((ds,i)=>{
     const unit=indexMode?'指数':(prepared[i].unit||'');
@@ -3029,9 +3043,10 @@ function renderCrossCompare(forceShow=true){
   }
   wrap.style.display='block';
   if(crossChart) crossChart.destroy();
+  if(crossTime) scales.x=timeAxis(datasets);
   crossChart=new Chart(document.getElementById('crossChart'),{
-    type:'line',data:{labels,datasets},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{mode:'nearest',intersect:false,callbacks:{label:ctx=>{
+    type:'line',data:{labels:crossTime?[]:labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{mode:'nearest',intersect:false,callbacks:{title:items=>crossTime&&items[0]?timeLabel(items[0].parsed.x,true):(items[0]?.label||''),label:ctx=>{
       const item=prepared[ctx.datasetIndex];
       const unit=indexMode?'':(item.unit||'');
       const v=ctx.parsed.y;
@@ -3229,12 +3244,12 @@ function renderMetrics(){
   const d=activeData()[cat];
   document.getElementById('metrics').innerHTML=d.metrics.map(m=>{
     const s=d.series[m.key];
-    if(s.dailyFailed){  // 日次の取得元がない指標は、古い年次値を最新のように見せない
+    if(s.dailyFailed && !Object.keys(s.dailyData||{}).length){  // 取れない時は古い値を見せない
       const on=compareMode?(compareKeys.includes(m.key)?' cmp':''):(activeKey===m.key?' on':'');
       return `<div class="mc${on}" onclick="clickMetric('${m.key}')">
       <div class="ml">${m.label}</div>
       <div class="mv">取得失敗</div>
-      <div class="ms fl">日次データなし（グラフは年次の参考値）</div>
+      <div class="ms fl">データを取得できませんでした</div>
     </div>`;
     }
     let latest, diff, sign, cls, subLabel='前期比', staticNote='';
@@ -3605,6 +3620,7 @@ function renderChart(){
   const allY=new Set();
   keys.forEach(k=>Object.keys(displaySeriesData(d.series[k],d).data).forEach(y=>allY.add(y)));
   const labels=[...allY].sort();
+  const mixedTime=compareMode&&labels.every(isTimeKey)&&new Set(labels.map(l=>String(l).length)).size>1;
 
   // メインチャートは常にd.series[k].dataを使用。都道府県パネルはサブチャート専用
   const datasets=[];
@@ -3616,7 +3632,7 @@ function renderChart(){
     if(indexMode) fd=applyIdx(fd);
     const col=C[ci++%C.length];
     const yAxis=compareMode&&i===1&&d.series[keys[0]].unit!==s.unit?'y2':'y';
-    datasets.push({label:rep.label,data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:chartPointRadius(labels),tension:chartTension(labels),spanGaps:true,yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
+    datasets.push({label:rep.label,data:mixedTime?timePoints(fd):labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:chartPointRadius(labels),tension:chartTension(labels),spanGaps:true,yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
   });
 
   document.getElementById('leg').innerHTML=datasets.map((ds,i)=>{
@@ -3633,6 +3649,7 @@ function renderChart(){
     y:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:11},color:'#888',callback:(v,i,ticks)=>fmtTick(v,i,ticks,indexMode?'':u0)},
       title:{display:true,text:indexMode?'指数(100=基準)':u0,font:{size:10},color:'#888'}}
   };
+  if(mixedTime) scales.x=timeAxis(datasets);
   if(needDual) scales.y2={position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:11},color:C[1]},title:{display:true,text:indexMode?'指数':u1,font:{size:10},color:C[1]}};
 
   const titleText=d.label+(compareMode&&keys.length>1?` — ${keys.map(k=>d.series[k].label).join(' vs ')}`:(keys.length===1?` — ${d.series[keys[0]].label}`:''))+(indexMode?' （基準年=100）':'');
@@ -3658,7 +3675,7 @@ function renderChart(){
     type:'line',data:{labels,datasets},
     options:{responsive:true,maintainAspectRatio:false,
       interaction:{mode:'nearest',intersect:false},
-      plugins:{legend:{display:false},tooltip:{mode:'nearest',intersect:false,callbacks:{label:ctx=>{
+      plugins:{legend:{display:false},tooltip:{mode:'nearest',intersect:false,callbacks:{title:items=>mixedTime&&items[0]?timeLabel(items[0].parsed.x,true):(items[0]?.label||''),label:ctx=>{
         const ki=keys[Math.min(ctx.datasetIndex,keys.length-1)];
         const unit=indexMode?'':(d.series[ki]?.unit||'');
         const v=ctx.parsed.y;
@@ -3918,7 +3935,7 @@ const NEWS_REGIONS = [
     {url:'https://news.google.com/rss/search?q=interest+rate+central+bank&hl=en-US&gl=US&ceid=US:en', name:'Central Banks', category:'マーケット'},
   ]},
 ];
-const NEWS_CATS = ['すべて','経済・金融','不動産・REIT','マーケット','政治・外交','エネルギー','テック'];
+const NEWS_CATS = ['すべて','経済・金融','不動産・REIT','マーケット','政治・外交','エネルギー','テック','その他'];
 const CAT_COLORS = {'経済・金融':'#185FA5','不動産・REIT':'#7F77DD','マーケット':'#1D9E75','政治・外交':'#D85A30','エネルギー':'#BA7517','テック':'#0F6E56','その他':'#888'};
 
 let newsRegion = 'jp';

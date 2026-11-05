@@ -1,0 +1,20 @@
+[
+  {"category": "不動産・REIT",
+   "local": "不動産|リート|投資法人|マンション|地価|住宅|賃貸|空室率|オフィスビル|再開発|物流施設|부동산|아파트|전세|전셋값|집값|주택|분양|재건축",
+   "en": "real estate|property (market|sector|developers?|starts|prices|sales|investment)|housing|house prices?|home prices?|home sales|homebuyers?|mortgages?|reits?|renters?|landlords?"},
+  {"category": "エネルギー",
+   "local": "原油|石油|ガソリン|天然ガス|電力|電気料金|再生可能エネ|再エネ|太陽光|原発|原子力|エネルギー|유가|원유|전력|에너지|천연가스",
+   "en": "oil|crude|brent|wti|opec|natural gas|lng|gas (prices?|exports?|ban|supply)|energy|electricity|nuclear power|solar|renewables?"},
+  {"category": "マーケット",
+   "local": "株価|株式|日経平均|東証|TOPIX|大引け|続落|続伸|反発|反落|相場|為替|円安|円高|金利|国債|利回り|債券|日銀|利上げ|利下げ|市況|ドル円|코스피|코스닥|증시|환율|주가|금리|채권",
+   "en": "stocks?|shares|wall st|equit(y|ies)|wall street|nasdaq|s&p|dow|ftse|dax|stoxx|set index|bonds?|yields?|yield curve|treasur(y|ies)|forex|exchange rates?|dollar|yen|yuan|baht|ipo|futures|rate (cut|hike)s?|interest rates?|central bank|federal reserve|fed|ecb|rba|boj|bank of (japan|england|thailand)"},
+  {"category": "テック",
+   "local": "(?<![A-Za-z])AI(?![A-Za-z])|人工知能|半導体|データセンター|ソフトウェア|クラウド|サイバー|ロボット|量子|반도체|인공지능|로봇|클라우드",
+   "en": "ai|chatbots?|semiconductors?|chips?|nvidia|openai|software|cloud|cyber\\w*|robots?|quantum|tech|technology|data cent(er|re)s?"},
+  {"category": "政治・外交",
+   "local": "政府|首相|大臣|国会|選挙|与党|野党|外相|外交|首脳|閣議|議員|大統領|知事|関税|制裁|政権|法案|대통령|국회|정부|장관|선거|여당|야당|외교|총리",
+   "en": "elections?|midterms?|congress|senate|parliament|president|prime minister|ministers?|government|govt|trump|biden|democrats?|republicans?|diplomat\\w*|geopolit\\w*|sanctions?|tariffs?|treaty|military|nato|european commission|european union|eu|summit|opposition|political|politics|extradition|maritime security"},
+  {"category": "経済・金融",
+   "local": "経済|景気|物価|インフレ|賃金|雇用|失業|倒産|銀行|金融|企業|合併|買収|決算|人事|社長|投資|予算|税|貿易|輸出|輸入|消費|業績|純利益|売上|上場|経営|有価証券|コーポレート|경제|물가|수출|수입|고용|기업|은행|금융|투자|실적|매출|과세|대표|조직개편",
+   "en": "economy|economic|economists?|gdp|inflation|cpi|wages?|jobs?|unemployment|payrolls?|trade|exports?|imports?|investment|investors?|banks?|banking|finance|financial|mergers?|acquisitions?|budget|tax(es)?|debt|revenue|profits?|earnings|consumers?|retail|credit|ratings?|growth"}
+]
