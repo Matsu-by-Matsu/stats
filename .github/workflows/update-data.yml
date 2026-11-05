@@ -1,12 +1,18 @@
-# 毎日2回、金利・株価・ニュースを自動取得して data/ を更新する(AI・課金なし)
+# 毎日2回、金利・株価・ニュースを自動取得してサイトへ直接公開する(AI・課金なし)
+# データはリポジトリに保存しないので、履歴が増えない。前回分は公開中のサイトから読む。
 name: update-data
 on:
   schedule:
     - cron: '0 22 * * *'   # 日本時間 毎朝07:00 (米国市場クローズ後)
     - cron: '30 8 * * *'   # 日本時間 毎夕17:30 (東京市場クローズ後)
   workflow_dispatch:        # Actionsタブから手動実行も可能
+  push:
+    branches: [main]        # index.html を直したらサイトにも反映する
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+  actions: write            # 自動実行が止まらないようにする最後の手順で使う
 concurrency:
   group: update-data
   cancel-in-progress: false
@@ -14,20 +20,36 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: 前回のデータを公開サイトから読み込む
+        run: |
+          mkdir -p data
+          for f in market news flow; do
+            curl -fsSL -o "data/$f.json" "https://matsu-by-matsu.github.io/stats/data/$f.json?_=$(date +%s)" || rm -f "data/$f.json"
+          done
       - name: データ取得
         run: python scripts/update_data.py
-      - name: 変更があればコミット
+      - name: 公開用フォルダを作る
         run: |
-          git config user.name  "stats-bot"
-          git config user.email "stats-bot@users.noreply.github.com"
-          git add data
-          if git diff --cached --quiet; then echo "変更なし"; else
-            git commit -m "データ自動更新 $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git pull --rebase origin main
-            git push
-          fi
+          mkdir _site
+          cp index.html _site/
+          cp -r data _site/data
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
+      # GitHubは60日間コミットがないと定期実行を止めるため、毎回有効化し直す
+      - name: 定期実行を維持する
+        run: |
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/update-data.yml/enable"

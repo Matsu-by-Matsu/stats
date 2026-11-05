@@ -16,7 +16,7 @@ NOW = dt.datetime.now(dt.timezone.utc)
 
 # ---- 取得対象(index.htmlのLIVE_SYMBOLSと同じ) ----
 SYMBOLS = {
-  'stocks': {'nikkei': '^N225', 'topix': '^TOPX', 'reit_idx': '1343.T'},
+  'stocks': {'nikkei': '^N225', 'reit_idx': '1343.T'},   # TOPIXはYahooに存在しない(下のNO_SOURCE参照)
   'rates': {'us_3m': '^IRX', 'us_5y': '^FVX', 'us_10y': '^TNX', 'us_30y': '^TYX'},
   'world_stocks': {'sp500': '^GSPC', 'nasdaq': '^IXIC', 'nikkei': '^N225', 'dax': '^GDAXI', 'ftse': '^FTSE',
                    'hangseng': '^HSI', 'dow': '^DJI', 'russell2000': '^RUT', 'eurostoxx50': '^STOXX50E',
@@ -27,7 +27,10 @@ SYMBOLS = {
   'world_commodities': {'gold': 'GC=F', 'wti': 'CL=F', 'brent': 'BZ=F', 'silver': 'SI=F', 'copper': 'HG=F',
                         'natgas': 'NG=F', 'platinum': 'PL=F', 'corn': 'ZC=F', 'wheat': 'ZW=F', 'soybeans': 'ZS=F'},
 }
-MAX_JUMP = 0.35        # 前日比35%超の変化は異常値として採用しない
+# 無料で使える公式の日次データが見つからない指標。推定や別物での代用はせず「取得失敗」と表示する
+NO_SOURCE = [{'id': 'stocks.topix', 'symbol': 'TOPIX', 'error': '無料の公式日次データがないため未取得'}]
+STALE_DAYS = 10        # 最新日がこの日数より古い系列は「古いまま」として報告する
+MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 400       # 直近400日は日次、それ以前は月末のみ(ファイルを軽くするため)
 
 def get(url, timeout=30, tries=3):
@@ -68,71 +71,100 @@ def compress(daily):
     return dict(sorted(out.items()))
 
 def validate(daily, label):
-    """明らかな異常(0以下・非数・前日比35%超)を除く。除いた件数も返す。"""
-    clean, bad, prev = {}, 0, None
+    """明らかな異常を除く。除いた件数も返す。
+    - 非数は除外。0以下は金利以外で除外(日本国債などのマイナス金利は実在する)
+    - 前日比35%超は、翌日に元の水準へ戻る一点だけの値と、翌日の裏付けがない最新値を除外
+      (水準が本当に変わった場合は採用する。古い値を基準に以後を全部捨てないため)
+    """
+    is_rate = label.startswith('rates')
+    vals, bad = [], 0
     for k in sorted(daily):
         v = daily[k]
-        if not isinstance(v, (int, float)) or v != v or v <= 0:
-            if label.startswith('rates') and isinstance(v, (int, float)) and v == v and v >= 0:
-                pass  # 金利は0%近傍もありうる
-            else:
-                bad += 1; continue
-        if prev is not None and prev > 0 and abs(v / prev - 1) > MAX_JUMP and not label.startswith('rates'):
+        if not isinstance(v, (int, float)) or v != v or (v <= 0 and not is_rate):
             bad += 1; continue
+        vals.append((k, v))
+    if is_rate:
+        return dict(vals), bad
+    clean, prev = {}, None
+    for i, (k, v) in enumerate(vals):
+        nxt = vals[i + 1][1] if i + 1 < len(vals) else None
+        if prev is not None and abs(v / prev - 1) > MAX_JUMP:
+            if nxt is None or abs(nxt / prev - 1) <= MAX_JUMP:
+                bad += 1; continue
         clean[k] = v; prev = v
     return clean, bad
 
-def fetch_yahoo(sym, rng='10y'):
+def fetch_yahoo(sym, rng='10y', start=None):
+    """日次の確定終値を返す。取引中の当日分は確定前なので含めない。
+    range=max は日次を指定しても月次や3か月ごとで返るため、長期は start で期間指定する。"""
     q = urllib.parse.quote(sym, safe='')
-    url = f'https://query1.finance.yahoo.com/v8/finance/chart/{q}?range={rng}&interval=1d&events=history'
+    span = f'period1={int(start.timestamp())}&period2={int(time.time())}' if start else f'range={rng}'
+    url = f'https://query1.finance.yahoo.com/v8/finance/chart/{q}?{span}&interval=1d&events=history'
     j = json.loads(get(url))
     res = j['chart']['result'][0]
+    meta = res['meta']
+    if meta.get('dataGranularity') != '1d':
+        raise RuntimeError('日次ではないデータ(%s)' % meta.get('dataGranularity'))
     ts = res['timestamp']; closes = res['indicators']['quote'][0]['close']
-    tz = res['meta'].get('exchangeTimezoneName') or 'UTC'
+    tz = meta.get('exchangeTimezoneName') or 'UTC'
     try:
         from zoneinfo import ZoneInfo
         z = ZoneInfo(tz)
     except Exception:
         z = dt.timezone.utc
+    reg = (meta.get('currentTradingPeriod') or {}).get('regular') or {}
+    now = time.time()
+    # Yahooの値は遅れて確定するので、取引終了から30分までは未確定として扱う
+    open_from = reg['start'] if reg.get('start', now + 1) <= now < reg.get('end', 0) + 1800 else None
     out = {}
     for t, c in zip(ts, closes):
         if c is None: continue
+        if open_from is not None and t >= open_from: continue
         d = dt.datetime.fromtimestamp(t, z).strftime('%Y-%m-%d')
         out[d] = round(float(c), 4)
     return out
 
+ERA = {'R': 2018, 'H': 1988, 'S': 1925}   # 和暦の元年の前年
+def parse_jgb(text):
+    """財務省CSVの10年物を {日付: 利回り} にする。西暦(2026/10/30)と和暦(R8.11.4)の両方に対応。"""
+    lines = [l for l in text.splitlines() if l.strip()]
+    hi = next(i for i, l in enumerate(lines) if re.match(r'\s*(Date|基準日)\s*,', l))
+    cols = [c.strip() for c in lines[hi].split(',')]
+    ci = cols.index('10Y') if '10Y' in cols else cols.index('10年')
+    out = {}
+    for l in lines[hi + 1:]:
+        p = [c.strip() for c in l.split(',')]
+        if len(p) <= ci: continue
+        m = re.match(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})$', p[0])
+        w = re.match(r'([RHS])(\d{1,2})\.(\d{1,2})\.(\d{1,2})$', p[0])
+        if m: y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        elif w: y, mo, d = ERA[w.group(1)] + int(w.group(2)), int(w.group(3)), int(w.group(4))
+        else: continue
+        try: v = float(p[ci])
+        except ValueError: continue   # '-' などは欠損
+        out['%04d-%02d-%02d' % (y, mo, d)] = v
+    return out
+
 def fetch_jgb10y():
-    """財務省 国債金利情報(公式CSV)。10年物の日次利回り。"""
-    urls = ['https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv',
-            'https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcm.csv']
-    last = None
-    for u in urls:
-        try:
-            text = get(u, timeout=60).decode('utf-8', 'ignore')
-            lines = [l for l in text.splitlines() if l.strip()]
-            hi = next(i for i, l in enumerate(lines) if re.match(r'\s*Date\s*,', l))
-            cols = [c.strip() for c in lines[hi].split(',')]
-            ci = cols.index('10Y')
-            out = {}
-            for l in lines[hi + 1:]:
-                p = [c.strip() for c in l.split(',')]
-                if len(p) <= ci: continue
-                m = re.match(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', p[0])
-                if not m: continue
-                try: v = float(p[ci])
-                except ValueError: continue   # '-' などは欠損
-                out['%s-%02d-%02d' % (m.group(1), int(m.group(2)), int(m.group(3)))] = v
-            if len(out) > 100:
-                return out
-            last = RuntimeError('too few rows')
-        except Exception as e:
-            last = e
-    raise last
+    """財務省 国債金利情報(公式CSV)。過去分は月に1度の更新なので、当月分のCSVを重ねる。
+    返り値: (日次データ, 当月分の取得に失敗した場合の理由 or None)"""
+    hist = parse_jgb(get('https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv',
+                         timeout=60).decode('utf-8', 'ignore'))
+    if len(hist) <= 100:
+        raise RuntimeError('too few rows')
+    try:
+        cur = parse_jgb(get('https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv',
+                            timeout=60).decode('cp932', 'ignore'))
+        if not cur: return hist, '当月分CSVに日次データなし'
+        hist.update(cur)
+        return hist, None
+    except Exception as e:
+        return hist, '当月分CSVの取得失敗: ' + str(e)[:120]
 
 def update_market():
     old = load('market.json', {'series': {}})
     series = old.get('series', {})
-    errors = []
+    errors = list(NO_SOURCE)
     def put(cat, key, symbol, daily, source):
         daily, bad = validate(daily, cat)
         if len(daily) < 20:
@@ -149,7 +181,9 @@ def update_market():
                 errors.append({'id': f'{cat}.{key}', 'symbol': sym, 'error': str(e)[:160]})
             time.sleep(0.4)
     try:
-        put('rates', 'jp_10y', 'JGB10Y', fetch_jgb10y(), '財務省 国債金利情報')
+        jgb, warn = fetch_jgb10y()
+        put('rates', 'jp_10y', 'JGB10Y', jgb, '財務省 国債金利情報')
+        if warn: errors.append({'id': 'rates.jp_10y', 'symbol': 'MOF', 'error': warn})
     except Exception as e:
         errors.append({'id': 'rates.jp_10y', 'symbol': 'MOF', 'error': str(e)[:160]})
     save('market.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'series': series})
@@ -158,12 +192,13 @@ def update_market():
 # マネーフロー画面用: 2006年からの日次全期間(3系列のみ)
 FLOW_SYMBOLS = ['^GSPC', '^IXIC', 'JPY=X']
 FLOW_START = '2006-01-01'
+FLOW_START_DT = dt.datetime(2006, 1, 1, tzinfo=dt.timezone.utc)
 def update_flow():
     old = load('flow.json', {'series': {}}).get('series', {})
     errors = []
     for sym in FLOW_SYMBOLS:
         try:
-            d = {k: v for k, v in fetch_yahoo(sym, 'max').items() if k >= FLOW_START}
+            d = {k: v for k, v in fetch_yahoo(sym, start=FLOW_START_DT).items() if k >= FLOW_START}
             d, bad = validate(d, 'flow')
             if len(d) < 1000:
                 raise RuntimeError('有効データ不足(%d件)' % len(d))
@@ -249,6 +284,12 @@ def update_news():
     save('news.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'regions': regions})
     return errors
 
+def stale_errors(series):
+    """全滅時に保持した古い値を、成功に見せないための点検。"""
+    limit = (NOW - dt.timedelta(days=STALE_DAYS)).strftime('%Y-%m-%d')
+    return [{'id': f'{c}.{k}', 'symbol': s.get('symbol'), 'error': '最新データが古いまま(%s)' % s.get('latest')}
+            for c, m in series.items() for k, s in m.items() if str(s.get('latest')) < limit]
+
 if __name__ == '__main__':
     os.makedirs(DATA, exist_ok=True)
     me = update_market() + update_flow(); ne = update_news()
@@ -257,7 +298,7 @@ if __name__ == '__main__':
     status = {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'),
               'marketSeries': sum(len(v) for v in mk.values()),
               'newsCounts': {k: len(v) for k, v in news.items()},
-              'errors': (me + ne)[:60]}
+              'errors': (me + stale_errors(mk) + ne)[:60]}
     save('status.json', status)
     print(json.dumps(status, ensure_ascii=False, indent=1))
     # 市場データが1本も取れなかった場合は失敗扱いにして、Actionsに赤信号を出す
