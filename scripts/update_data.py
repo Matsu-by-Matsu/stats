@@ -30,7 +30,7 @@ SYMBOLS = {
 FRED_RATES = {'us_ff': 'DFF', 'eu_policy': 'ECBMRRFR'}   # 米FF実効金利、ECB主要リファイナンス金利
 # 無料で使える公式の日次データが見つからない指標。推定や別物での代用はせず「取得失敗」と表示する
 NO_SOURCE = [{'id': 'stocks.topix', 'symbol': 'TOPIX', 'error': '無料の公式日次データがないため未取得'}]
-STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 200}   # 最新日がこの日数より古い系列は「古いまま」と報告
+STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 300}   # 最新日がこの日数より古い系列は「古いまま」と報告
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
 
@@ -226,7 +226,7 @@ def fetch_cpi():
             if not re.fullmatch(r'\d{6}', d): continue
             for k, name in names.items():
                 try: idx[k][d[:4] + '-' + d[4:]] = float(p[head.index(name)])
-                except ValueError: pass
+                except (ValueError, IndexError): pass
         for k in names:
             out[k].update(yoy(idx[k], 12))
     return out
@@ -289,12 +289,12 @@ def fetch_inbound():
         months = {}
         for row in wb[name].iter_rows(values_only=True):
             if not months:
-                months = {i: int(re.match(r'(\d+)月', c).group(1)) for i, c in enumerate(row)
+                months = {i: int(re.match(r'(\d+)月', c.strip()).group(1)) for i, c in enumerate(row)
                           if isinstance(c, str) and re.fullmatch(r'\d+月', c.strip())}
                 continue
             if row[0] == '総数':
                 for i, mo in months.items():
-                    if isinstance(row[i], (int, float)) and row[i] > 0:
+                    if i < len(row) and isinstance(row[i], (int, float)) and row[i] > 0:
                         out[month_key(int(name), mo)] = round(row[i] / 1e4, 1)
                 break
     return out
