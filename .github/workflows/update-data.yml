@@ -1,0 +1,33 @@
+# 毎日2回、金利・株価・ニュースを自動取得して data/ を更新する(AI・課金なし)
+name: update-data
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 日本時間 毎朝07:00 (米国市場クローズ後)
+    - cron: '30 8 * * *'   # 日本時間 毎夕17:30 (東京市場クローズ後)
+  workflow_dispatch:        # Actionsタブから手動実行も可能
+permissions:
+  contents: write
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: データ取得
+        run: python scripts/update_data.py
+      - name: 変更があればコミット
+        run: |
+          git config user.name  "stats-bot"
+          git config user.email "stats-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "変更なし"; else
+            git commit -m "データ自動更新 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin main
+            git push
+          fi

@@ -384,7 +384,7 @@ h1 em{color:var(--blue);font-style:normal}
   </div>
   <div class="news-tabs" id="newsTabs"></div>
   <div class="news-cats" id="newsCats"></div>
-<div id="newsContent"><div class="news-loading">「最新ニュース取得」ボタンを押すと、各国のニュースを取得・要約します。</div></div>
+<div id="newsContent"><div class="news-loading">ニュースを読み込み中...</div></div>
 </div>
 
 <!-- 世界のお金の全体像 -->
@@ -2004,46 +2004,48 @@ function updateCashFlow(){
   document.getElementById('flowDate').textContent='Snapshot: '+(flowCurrentDate||fmtDate(new Date()))+' / Yahoo Finance実績値、矢印=前営業日比';
 }
 
-async function fetchJSON(url){
-  const urls=[{url,type:'json'}];
-  if(/^https:\/\/query1\.finance\.yahoo\.com\//.test(url)){
-    urls.push({url:'https://proxy.cors.sh/'+url,type:'json'});
-    urls.push({url:'https://r.jina.ai/http://'+url.replace(/^https?:\/\//,''),type:'text-json'});
-  }
-  let lastErr;
-  for(const entry of urls){
-    try{
-      const r=await fetch(entry.url,{cache:'no-store'});
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      if(entry.type==='text-json'){
-        const text=await r.text();
-        const start=text.indexOf('{');
-        const end=text.lastIndexOf('}');
-        if(start<0||end<=start) throw new Error('JSON body not found');
-        return JSON.parse(text.slice(start,end+1));
-      }
+let MARKET_READY=null;
+function marketPromise(){
+  if(!MARKET_READY){
+    MARKET_READY=fetch('data/market.json?_='+Date.now(),{cache:'no-store'}).then(function(r){
+      if(!r.ok) throw new Error('market.json HTTP '+r.status);
       return r.json();
-    }catch(e){
-      lastErr=e;
+    });
+  }
+  return MARKET_READY;
+}
+// 自動更新済みの data/market.json から読む(ブラウザから外部サイトへは取りに行かない)。
+// 400日より前は月末のみの保存で「前営業日比」が不正確になるため、連続した日次の期間だけを返す。
+async function fetchYahooSeries(symbol){
+  try{
+    const fr=await fetch('data/flow.json?_='+Date.now(),{cache:'no-store'});
+    if(fr.ok){
+      const fj=await fr.json();
+      const dd=fj.series&&fj.series[symbol];
+      if(dd){
+        return Object.keys(dd).sort()
+          .filter(function(d){return d>=FLOW_HISTORY_START;})
+          .map(function(d){return {date:d,close:+(+dd[d]).toFixed(4)};})
+          .filter(function(p){return Number.isFinite(p.close)&&p.close>0;});
+      }
+    }
+  }catch(e){}
+  const j=await marketPromise();
+  const gen=new Date(j.generatedAt||Date.now());
+  const cutoff=fmtDate(new Date(gen.getTime()-380*86400000));
+  const cats=j.series||{};
+  for(const c of Object.keys(cats)){
+    for(const k of Object.keys(cats[c])){
+      const e=cats[c][k];
+      if(e.symbol===symbol && e.daily){
+        return Object.keys(e.daily).sort()
+          .filter(function(d){return d>=cutoff && d>=FLOW_HISTORY_START;})
+          .map(function(d){return {date:d,close:+(+e.daily[d]).toFixed(4)};})
+          .filter(function(p){return Number.isFinite(p.close)&&p.close>0;});
+      }
     }
   }
-  throw lastErr || new Error('fetch failed');
-}
-function yahooSymbolPath(symbol){
-  return encodeURIComponent(symbol).replace(/%5E/g,'%5E').replace(/%3D/g,'%3D');
-}
-async function fetchYahooSeries(symbol){
-  const period1=Math.floor(new Date('1990-01-01T00:00:00Z').getTime()/1000);
-  const period2=Math.floor((Date.now()+86400000)/1000);
-  const url='https://query1.finance.yahoo.com/v8/finance/chart/'+yahooSymbolPath(symbol)+'?period1='+period1+'&period2='+period2+'&interval=1d&events=history&includeAdjustedClose=true&_='+Date.now();
-  const json=await fetchJSON(url);
-  const result=json?.chart?.result?.[0];
-  const ts=result?.timestamp||[];
-  const quote=result?.indicators?.quote?.[0]||{};
-  const adj=result?.indicators?.adjclose?.[0]||{};
-  const closes=quote.close||adj.adjclose||[];
-  return ts.map((t,i)=>({date:fmtDate(new Date(t*1000)),close:+(+closes[i]).toFixed(4)}))
-    .filter(p=>p.date>=FLOW_HISTORY_START&&Number.isFinite(p.close)&&p.close>0);
+  throw new Error('data/market.json に '+symbol+' がありません');
 }
 function findSeriesIndex(series,date){
   let lo=0,hi=series.length-1,ans=-1;
@@ -2253,7 +2255,7 @@ const DATA={
   rates:{
     label:'金利（各国）',color:'#534AB7',
     source:'https://finance.yahoo.com/lookup/',srcLbl:'Yahoo Finance・全銀協・日銀・ECB',
-    isLive:true,unverified:true,qualityNote:'米国市場金利（3か月・5年・10年・30年）はYahoo Finance日次で更新。TIBOR、政策金利、日本10年国債、EU政策金利はHTML内の暫定年次系列で、日次LIVEではありません。',
+    isLive:true,unverified:true,qualityNote:'米国市場金利（3か月・5年・10年・30年）はYahoo Finance、日本10年国債は財務省の公式CSVから毎日自動更新。TIBOR・政策金利・EU政策金利は年次の静的データで、日次ではありません。',
     metrics:[
       {key:'jp_tibor3m',label:'日本：3M TIBOR（%）'},
       {key:'jp_10y',label:'日本：10年国債（%）'},
@@ -2707,6 +2709,21 @@ const LIVE_SYMBOLS={
   world_commodities:{gold:'GC=F',wti:'CL=F',brent:'BZ=F',silver:'SI=F',copper:'HG=F',natgas:'NG=F',platinum:'PL=F',corn:'ZC=F',wheat:'ZW=F',soybeans:'ZS=F'}
 };
 let liveCacheLoaded=false;
+let MARKET_JSON=null;
+function fmtJST(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return iso; return new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' JST'; }
+async function reloadMarketFile(catKey,d){
+  const r=await fetch('data/market.json?_='+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error('market.json HTTP '+r.status);
+  MARKET_JSON=await r.json();
+  liveCacheLoaded=false; loadLiveSeriesCache();
+  const got=Object.keys((MARKET_JSON.series&&MARKET_JSON.series[catKey])||{});
+  Object.keys(MARKET_JSON.series||{}).forEach(function(c){
+    const ks=Object.keys(MARKET_JSON.series[c]); const lat=ks.map(function(k){return MARKET_JSON.series[c][k].latest;}).sort().slice(-1)[0];
+    lastUpdated[c]=fmtJST(MARKET_JSON.generatedAt)+'に自動取得 / 最新営業日 '+(lat||'不明')+' / '+ks.length+'系列';
+  });
+  if(!got.length) throw new Error('このカテゴリのデータがありません');
+  return got;
+}
 let liveFetchInFlight=false;
 const liveAutoTried={};
 
@@ -2722,6 +2739,8 @@ function loadLiveSeriesCache(){
         if(cached?.dailyData) s.dailyData=cached.dailyData;
         if(cached?.fetchedAt) s.fetchedAt=cached.fetchedAt;
         if(cached?.latestMarketDate) s.latestMarketDate=cached.latestMarketDate;
+        const f=MARKET_JSON&&MARKET_JSON.series&&MARKET_JSON.series[catKey]&&MARKET_JSON.series[catKey][k];
+        if(f&&f.daily){ s.dailyData=f.daily; s.fetchedAt=f.fetchedAt; s.latestMarketDate=f.latest; s.fromFile=true; s.fileSource=f.source; }
       });
     });
   });
@@ -2769,7 +2788,7 @@ function isLiveSeriesFresh(s){
   if(!latest) return false;
   const fetched=s.fetchedAt||'';
   const fetchedToday=fetched===new Date().toLocaleDateString('ja-JP') || fetched===todayKey();
-  return fetchedToday && daysSinceDateKey(latest)<=7;
+  return (fetchedToday || s.fromFile) && daysSinceDateKey(latest)<=7;
 }
 function filterByPeriod(data){
   const keys=Object.keys(data||{}).sort((a,b)=>keyDate(a)-keyDate(b));
@@ -2831,7 +2850,7 @@ function liveHint(d,keys){
     return marketDisplayMode()==='daily'?'月表示: 直近1か月の日次終値':'年表示: 月末終値で表示（1年=直近12か月）';
   }
   if(hasDailyForKeys(d,keys)) return 'キャッシュが古いため最新日次を自動再取得中。取得後にカードとチャートを更新します';
-  return '年次固定値を暫定表示。最新データ取得後は月表示=直近1か月の日次、年表示=月末終値に切替';
+  return 'この指標は年次の静的データです（日次更新の対象外）。日次更新の指標には「LIVE」表示があります';
 }
 
 async function fetchLiveCategory(catKey,d){
@@ -2860,6 +2879,7 @@ async function fetchLiveCategory(catKey,d){
 }
 
 function autoFetchLiveIfNeeded(d,keys){
+  return; // 取得はGitHub Actions側で毎日実行。ブラウザからは取りに行かない
   if(!d.isLive || liveFetchInFlight || hasFreshDailyForKeys(d,keys) || liveAutoTried[cat]) return;
   if(!LIVE_SYMBOLS[cat]) return;
   liveAutoTried[cat]=true;
@@ -3262,7 +3282,7 @@ function renderDefinition(){
   const parts=[];
   if(d.definition) parts.push(d.definition);
   if(d.qualityNote) parts.push('<b>データ注意:</b> '+d.qualityNote);
-  if(d.isLive) parts.push('<b>LIVE表示:</b> 「最新データ取得」後は、カードの数値はYahoo Financeの日次終値の最新値を表示します。チャートは「月」=直近1か月の日次終値、「1年」=直近12か月の月末終値、「2年」以上=各月末終値で表示します。年次固定値は未取得時だけの暫定表示です。');
+  if(d.isLive) parts.push('<b>LIVE表示:</b> データは毎日自動更新されます（朝7時・夕17:30 JST）。カードの数値はYahoo Financeの日次終値の最新値を表示します。チャートは「月」=直近1か月の日次終値、「1年」=直近12か月の月末終値、「2年」以上=各月末終値で表示します。年次固定値は未取得時だけの暫定表示です。');
   if(s?.definition) parts.push(s.definition);
   else if(s){
     const shape=s.lines?'複数系列':(isTimeSeriesData(s.data)?'年次時系列':'横断比較');
@@ -3678,7 +3698,7 @@ async function fetchLatest(){
   const d=activeData()[cat];
   if(d.isLive && LIVE_SYMBOLS[cat]){
     try{
-      const ok=await fetchLiveCategory(cat,d);
+      const ok=await reloadMarketFile(cat,d);
       document.getElementById('ait').className='ait';
       document.getElementById('ait').textContent=d.label+'をYahoo Financeの日次終値で更新しました（取得 '+ok.length+' 系列）。カードは最新日次、チャートは選択期間に応じて日次または月末値で表示します。';
       renderMetrics();
@@ -3687,7 +3707,7 @@ async function fetchLatest(){
       renderCrossCompare(false);
     }catch(e){
       document.getElementById('ait').className='ait';
-      document.getElementById('ait').textContent='Yahoo Finance日次データの取得に失敗しました。時間をおいて再実行してください。';
+      document.getElementById('ait').textContent='自動更新データ(data/market.json)を読み込めませんでした。時間をおいて再読込してください。';
     }
     btn.classList.remove('loading'); btn.textContent='🔄 最新データ取得';
     return;
@@ -3698,51 +3718,8 @@ async function fetchLatest(){
     btn.classList.remove('loading'); btn.textContent='🔄 最新データ取得';
     return;
   }
-  const prompt=`あなたは金融データの専門家です。以下の指標の最新値を調べてJSON形式のみで返してください。他のテキストは不要です。
-カテゴリ: ${d.label}
-指標: ${Object.entries(d.series).map(([k,s])=>`${k}(${s.label},${s.unit})`).join(', ')}
-必要情報: 各指標の直近の実績値または市場値（年次または月次）
-出力形式: {"updates":{"指標key":"値(数値のみ)","as_of":"YYYY-MM"}, "summary":"50字以内の状況説明"}
-現在日: 2026年6月4日`;
-
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',max_tokens:600,
-        tools:[{type:'web_search_20250305',name:'web_search'}],
-        messages:[{role:'user',content:prompt}]
-      })
-    });
-    const data=await resp.json();
-    const textBlocks=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('');
-    try{
-      const clean=textBlocks.replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(clean);
-      if(parsed.updates){
-        const asOf=parsed.as_of||parsed.updates.as_of;
-        Object.entries(parsed.updates).forEach(([k,v])=>{
-          if(activeData()[cat].series[k] && typeof v==='number'){
-            activeData()[cat].series[k].data['最新']=v;
-          }
-        });
-        const now=new Date().toLocaleDateString('ja-JP');
-        lastUpdated[cat]=now+(asOf?` (${asOf}時点)`:'');
-        if(parsed.summary){
-          document.getElementById('ait').className='ait';
-          document.getElementById('ait').textContent=parsed.summary;
-        }
-        renderMetrics();
-        renderChart();
-      }
-    }catch(e){
-      document.getElementById('ait').className='ait';
-      document.getElementById('ait').textContent=textBlocks?.slice(0,200)||'データ取得完了（解析エラー）';
-    }
-  }catch(e){
-    document.getElementById('ait').className='ait';
-    document.getElementById('ait').textContent='通信エラーが発生しました。';
-  }
+  document.getElementById('ait').className='ait';
+  document.getElementById('ait').textContent=d.label+'は公的統計の静的データです（日次更新ではありません）。出典リンクから原データを確認できます。';
   btn.classList.remove('loading'); btn.textContent='🔄 最新データ取得';
 }
 
@@ -3788,18 +3765,6 @@ async function renderAI(){
     el.className='ait';
     el.textContent=`${d.label}の${s.label}を表示中です。グラフと比較モードで推移を確認できます。`;
   }
-  try{
-    const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(),6000);
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
-        messages:[{role:'user',content:`日本統計の専門家として、以下データのトレンドと注目ポイントを120文字程度で日本語解説（箇条書き不要、2〜3文）。\nカテゴリ:${d.label} 指標:${s.label}（${s.unit}）\n最近データ: ${vals}`}]})
-    });
-    clearTimeout(timer);
-    const data=await r.json();
-    const t=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'解説取得失敗';
-    el.className='ait'; el.textContent=t;
-  }catch(e){}
 }
 
 function dlCSV(){
@@ -3904,6 +3869,7 @@ let newsRegion = 'jp';
 let newsCat = 'すべて';
 let newsData = {}; // {region: [{headline, summary, source, url, category, time}]}
 let newsFetching = false;
+let newsMeta = '';
 
 // タブ初期化
 document.getElementById('newsTabs').innerHTML = NEWS_REGIONS.map(r =>
@@ -3929,7 +3895,7 @@ function renderNewsContent(){
   const content = document.getElementById('newsContent');
   const items = newsData[newsRegion];
   if(!items){
-    content.innerHTML = '<div class="news-loading">このリージョンのニュースはまだ取得していません。「最新ニュース取得」を押してください。</div>';
+    content.innerHTML = '<div class="news-loading">このリージョンのニュースはまだありません。</div>';
     return;
   }
   const filtered = newsCat==='すべて' ? items : items.filter(n => n.category===newsCat);
@@ -3942,7 +3908,8 @@ function renderNewsContent(){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
     });
   };
-  content.innerHTML = '<div class="news-grid">' + filtered.map(n => {
+  const head = '<div style="font-size:12px;color:var(--mut);margin:0 0 10px">自動取得: ' + esc(fmtJST(newsMeta)) + ' ／ ' + filtered.length + '件 ／ 各記事の媒体名と元記事リンクを表示（本文は各媒体のサイトで確認）</div>';
+  content.innerHTML = head + '<div class="news-grid">' + filtered.map(n => {
     const col = CAT_COLORS[n.category] || CAT_COLORS['その他'];
     const safeUrl = /^https?:\/\//.test(n.url || '') ? n.url : '';
     return `<div class="news-card">
@@ -3951,7 +3918,7 @@ function renderNewsContent(){
         <span class="news-time">${esc(n.time||'')}</span>
       </div>
       <div class="news-headline">${esc(n.headline)}</div>
-      <div class="news-summary">${esc(n.summary)}</div>
+      ${n.summary ? `<div class="news-summary">${esc(n.summary)}</div>` : ''}
       ${safeUrl ? `<a class="news-src" href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer">↗ ${esc(n.source||'ソース')}</a>` : `<span class="news-src">${esc(n.source||'')}</span>`}
     </div>`;
   }).join('') + '</div>';
@@ -3961,145 +3928,53 @@ async function fetchNews(){
   if(newsFetching) return;
   newsFetching = true;
   var btn = document.getElementById('newsUpdBtn');
-  btn.classList.add('loading');
-  btn.textContent = '取得中...';
-  document.getElementById('newsContent').innerHTML = '<div class="news-loading">ニュースを取得中...</div>';
-  var region = NEWS_REGIONS.find(function(r){ return r.key===newsRegion; });
-  if(!region){
-    document.getElementById('newsContent').innerHTML = '<div class="news-err">ニュース地域が見つかりません</div>';
-    newsFetching = false;
-    btn.classList.remove('loading');
-    btn.textContent = '最新ニュース取得';
-    return;
-  }
-  var feeds = region.feeds;
-  var allArticles = [];
-
-  function parseRSSXML(xmlText, feedName, category){
-    try {
-      var parser = new DOMParser();
-      var doc = parser.parseFromString(xmlText, 'text/xml');
-      if(doc.querySelector('parsererror')) throw new Error('Invalid XML');
-      var items = doc.querySelectorAll('item');
-      var results = [];
-      items.forEach(function(item){
-        var title = item.querySelector('title');
-        var link = item.querySelector('link');
-        var desc = item.querySelector('description');
-        var pubDate = item.querySelector('pubDate');
-        var titleText = title ? (title.textContent || '') : '';
-        var descText = desc ? (desc.textContent || '').replace(/<[^>]*>/g,'').trim() : '';
-        var timeText = '';
-        var timestamp = 0;
-        if(pubDate && pubDate.textContent){
-          try {
-            var dt = new Date(pubDate.textContent);
-            timestamp = dt.getTime() || 0;
-            timeText = dt.toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-          } catch(e){}
-        }
-        if(titleText){
-          results.push({
-            headline: titleText.slice(0,60),
-            summary: descText.slice(0,150),
-            category: category || 'その他',
-            source: feedName,
-            url: link ? (link.textContent || link.getAttribute('href') || '') : '',
-            time: timeText,
-            timestamp: timestamp
-          });
-        }
+  btn.classList.add('loading'); btn.textContent = '読み込み中...';
+  try{
+    var r = await fetch('data/news.json?_=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    var j = await r.json();
+    newsMeta = j.generatedAt || '';
+    Object.keys(j.regions || {}).forEach(function(k){
+      newsData[k] = (j.regions[k] || []).map(function(n){
+        return {headline:n.headline, summary:'', source:n.source, url:n.url, category:n.category, time:fmtJST(n.time), ts:n.time};
       });
-      return results;
-    } catch(e) {
-      console.warn('パースエラー:', e);
-      return [];
-    }
-  }
-
-  function fetchWithTimeout(url, timeoutMs){
-    var controller = new AbortController();
-    var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
-    return fetch(url, {signal: controller.signal, cache: 'no-store'})
-      .finally(function(){ clearTimeout(timer); });
-  }
-
-  function buildProxyUrls(feedUrl){
-    return [
-      'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl),
-      'https://api.allorigins.win/raw?url=' + encodeURIComponent(feedUrl),
-      'https://api.codetabs.com/v1/proxy?quest=' + feedUrl
-    ];
-  }
-
-  function parseRSSJSON(jsonText, feedName, category){
-    try {
-      var data = JSON.parse(jsonText);
-      if(data.status !== 'ok' || !Array.isArray(data.items)) return [];
-      return data.items.map(function(item){
-        var dt = item.pubDate ? new Date(item.pubDate) : null;
-        var timestamp = dt ? (dt.getTime() || 0) : 0;
-        var timeText = dt ? dt.toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-        var descText = (item.description || item.content || '').replace(/<[^>]*>/g,'').trim();
-        return {
-          headline: (item.title || '').slice(0,60),
-          summary: descText.slice(0,150),
-          category: category || 'その他',
-          source: feedName,
-          url: item.link || '',
-          time: timeText,
-          timestamp: timestamp
-        };
-      }).filter(function(item){ return item.headline; });
-    } catch(e) {
-      return [];
-    }
-  }
-
-  async function fetchFeed(feed){
-    var urls = buildProxyUrls(feed.url);
-    var lastErr = null;
-    for(var i = 0; i < urls.length; i++){
-      try {
-        var r = await fetchWithTimeout(urls[i], 10000);
-        if(!r.ok) throw new Error('HTTP ' + r.status);
-        var text = await r.text();
-        var items = urls[i].indexOf('rss2json.com') !== -1
-          ? parseRSSJSON(text, feed.name, feed.category)
-          : parseRSSXML(text, feed.name, feed.category);
-        if(items.length) return items;
-        throw new Error('RSS items not found');
-      } catch(e) {
-        lastErr = e;
-      }
-    }
-    console.warn(feed.name, lastErr ? lastErr.message : '取得失敗');
-    return [];
-  }
-
-  function finish(){
-    var articles = allArticles.filter(function(a){ return a.headline; });
-    if(articles.length === 0){
-      document.getElementById('newsContent').innerHTML = '<div class="news-err">記事を取得できませんでした。時間をおいて再実行してください。</div>';
-    } else {
-      articles.sort(function(a,b){ return (b.timestamp || 0) - (a.timestamp || 0); });
-      newsData[newsRegion] = articles;
-      document.getElementById('newsUpd').textContent = '最終更新: ' + new Date().toLocaleString('ja-JP');
-      renderNewsContent();
-    }
-    newsFetching = false;
-    btn.classList.remove('loading');
-    btn.textContent = '最新ニュース取得';
-  }
-
-  Promise.all(feeds.map(fetchFeed)).then(function(results){
-    results.forEach(function(items){
-      items.forEach(function(i){ allArticles.push(i); });
     });
-  }).catch(function(e){
-    console.warn('ニュース取得エラー:', e);
-  }).finally(finish);
+    renderNewsContent();
+  }catch(e){
+    document.getElementById('newsContent').innerHTML = '<div class="news-err">ニュースデータ(data/news.json)を読み込めませんでした。自動更新が一度も成功していない可能性があります（GitHubのActionsタブで確認できます）。</div>';
+    console.warn('ニュース読込エラー:', e);
+  }
+  newsFetching = false;
+  btn.classList.remove('loading'); btn.textContent = '\U0001F504 再読み込み';
 }
+
+(async function initAutoData(){
+  try{
+    var r = await fetch('data/market.json?_=' + Date.now(), {cache:'no-store'});
+    if(r.ok){
+      MARKET_JSON = await r.json();
+      liveCacheLoaded = false; loadLiveSeriesCache();
+      Object.keys(MARKET_JSON.series || {}).forEach(function(c){
+        var ks = Object.keys(MARKET_JSON.series[c]);
+        var lat = ks.map(function(k){return MARKET_JSON.series[c][k].latest;}).sort().slice(-1)[0];
+        lastUpdated[c] = fmtJST(MARKET_JSON.generatedAt) + 'に自動取得 / 最新営業日 ' + (lat||'不明') + ' / ' + ks.length + '系列';
+      });
+      try{ renderMetrics(); renderChart(); renderDefinition(); }catch(e){ console.warn(e); }
+    }
+  }catch(e){ console.warn('market.json未取得', e); }
+  try{
+    var r2 = await fetch('data/status.json?_=' + Date.now(), {cache:'no-store'});
+    if(r2.ok){
+      var st = await r2.json();
+      var errs = st.errors || [];
+      var el = document.getElementById('dataStatus');
+      el.innerHTML = '自動更新: ' + fmtJST(st.generatedAt) + ' ／ 市場データ ' + st.marketSeries + '系列 ／ 取得失敗 ' + errs.length + '件' +
+        (errs.length ? '<details style="margin-top:6px"><summary style="cursor:pointer">失敗の内訳（失敗した指標は前回の値を保持。推定値は使っていません）</summary>' +
+          errs.map(function(e){return '<div>' + String(e.id).replace(/[<>&]/g,'') + ' : ' + String(e.error).replace(/[<>&]/g,'') + '</div>';}).join('') + '</details>' : '');
+    }
+  }catch(e){}
+})();
+fetchNews();
 
 loadFlowHistory();
 const requestedFlowDate=new URLSearchParams(location.search).get('flowDate');
@@ -4109,8 +3984,5 @@ if(flowCurrentDate)loadFlowSnapshot(flowCurrentDate);else updateCashFlow();
 fetchFlowDaily();
 
 </script>
-
-
-
-
+<div id="dataStatus" style="font-size:11px;color:var(--mut);margin:20px 16px;text-align:center">自動更新の状態を確認中...</div>
 <footer style="padding:20px 24px;margin-top:24px;border-top:1px solid #8884;color:#858599;background:inherit"><section aria-label="関連プロジェクト" id="gsj-related-project" style="font:12px/1.6 system-ui,sans-serif;letter-spacing:normal;text-transform:none;color:inherit"><strong>関連プロジェクト</strong><p style="margin:4px 0 0"><a href="https://groupstayjapan.synthx.jp/" style="color:inherit;text-decoration:underline">GROUP STAY JAPAN</a> — 訪日グループ・連泊向けのアパートメントホテル比較</p></section></footer>
