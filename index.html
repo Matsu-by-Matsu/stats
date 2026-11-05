@@ -1782,7 +1782,7 @@ window.addEventListener('DOMContentLoaded', function() {
   <div id="rankTable"></div>
 </div>
 <div class="aib">
-  <div class="ailt">AI解説（Claude）</div>
+  <div class="ailt">自動コメント（AI不使用）</div>
   <div class="ait ail" id="ait">カテゴリを選択するとAIが解説します。</div>
 </div>
 </div><!-- /statsContent -->
@@ -2257,7 +2257,7 @@ const DATA={
   rates:{
     label:'金利（各国）',color:'#534AB7',
     source:'https://finance.yahoo.com/lookup/',srcLbl:'Yahoo Finance・全銀協・日銀・ECB',
-    isLive:true,unverified:true,qualityNote:'米国市場金利（3か月・5年・10年・30年）はYahoo Finance、日本10年国債は財務省の公式CSVから毎日自動更新。TIBOR・政策金利・EU政策金利は年次の静的データで、日次ではありません。',
+    isLive:true,unverified:true,qualityNote:'米国市場金利（3か月・5年・10年・30年）はYahoo Finance、日本10年国債は財務省の公式CSVから毎日自動更新。米FF金利・EU政策金利はFRED（米連銀）の日次データ。TIBOR・日本の政策金利は年次の参考値で、自動更新していません。',
     metrics:[
       {key:'jp_tibor3m',label:'日本：3M TIBOR（%）'},
       {key:'jp_10y',label:'日本：10年国債（%）'},
@@ -2294,7 +2294,7 @@ const DATA={
     series:{
       nikkei:{label:'日経平均',unit:'円',data:{2005:16111,2006:17226,2007:15308,2008:8860,2009:10546,2010:10229,2011:8455,2012:10395,2013:16291,2014:17451,2015:19034,2016:19114,2017:22765,2018:20015,2019:23657,2020:27444,2021:28792,2022:26095,2023:33465,2024:39894,2025:39503}},
       topix:{label:'TOPIX',unit:'pt',dailyFailed:true,data:{2005:1649,2006:1681,2007:1476,2008:860,2009:907,2010:898,2011:729,2012:859,2013:1302,2014:1408,2015:1547,2016:1519,2017:1817,2018:1494,2019:1721,2020:1804,2021:1992,2022:1891,2023:2336,2024:2697,2025:2770}},
-      reit_idx:{label:'REIT ETF(1343・東証REIT指数連動)',unit:'pt',data:{2005:1563,2006:1942,2007:2212,2008:846,2009:964,2010:1109,2011:862,2012:1106,2013:1605,2014:1816,2015:1915,2016:1768,2017:1797,2018:1653,2019:2010,2020:1609,2021:1971,2022:1754,2023:1831,2024:1788,2025:1820}}
+      reit_idx:{label:'REIT ETF(1343・東証REIT指数連動)',unit:'円',data:{2005:1563,2006:1942,2007:2212,2008:846,2009:964,2010:1109,2011:862,2012:1106,2013:1605,2014:1816,2015:1915,2016:1768,2017:1797,2018:1653,2019:2010,2020:1609,2021:1971,2022:1754,2023:1831,2024:1788,2025:1820}}
     }
   },
 
@@ -2524,7 +2524,7 @@ function fmtInt(v){
 function fmtValue(v,unit){
   const n=Number(v);
   if(!Number.isFinite(n)) return v;
-  if(unit==='%') return n.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+  if(unit==='%') return n.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:3});
   // 1.12(ユーロドル)や2.96(天然ガス)が「1」「3」に見えないよう、小さい値は小数を残す
   const a=Math.abs(n);
   return n.toLocaleString(undefined,{maximumFractionDigits:a>=1000?0:a>=100?1:a>=10?2:4});
@@ -2690,10 +2690,10 @@ function ensureLiveMetric(catKey,key,label,unit){
   ['world_fx','usdmxn','USD/MXN','MXN'],
   ['world_fx','usdbrl','USD/BRL','BRL'],
   ['world_fx','usdtry','USD/TRY','TRY'],
-  ['world_commodities','platinum','プラチナ先物','USD'],
-  ['world_commodities','corn','とうもろこし先物','USD'],
-  ['world_commodities','wheat','小麦先物','USD'],
-  ['world_commodities','soybeans','大豆先物','USD']
+  ['world_commodities','platinum','プラチナ先物','USD/oz'],
+  ['world_commodities','corn','とうもろこし先物','セント/bu'],
+  ['world_commodities','wheat','小麦先物','セント/bu'],
+  ['world_commodities','soybeans','大豆先物','セント/bu']
 ].forEach(args=>ensureLiveMetric(...args));
 if(WORLD_DATA.world_stocks){
   WORLD_DATA.world_stocks.definition='<b>定義:</b> Yahoo Financeの主要株価指数を日次で取得します。S&P500、NASDAQ、日経平均、DAX、FTSE100、Hang Sengに加え、Dow Jones、Russell 2000、Euro Stoxx 50、CAC 40、上海総合、SENSEXを取得対象にしています。';
@@ -2755,7 +2755,7 @@ function saveLiveSeriesCache(){
   [DATA,WORLD_DATA].forEach(scope=>{
     Object.entries(scope||{}).forEach(([catKey,d])=>{
       Object.entries(d.series||{}).forEach(([k,s])=>{
-        if(s.dailyData){
+        if(s.dailyData&&!s.fromFile){
           if(!cache[catKey]) cache[catKey]={};
           cache[catKey][k]={dailyData:s.dailyData,fetchedAt:s.fetchedAt||'',latestMarketDate:s.latestMarketDate||latestDataKey(s.dailyData)};
         }
@@ -2806,29 +2806,11 @@ function filterByPeriod(data){
   keys.forEach(k=>{ if(keyDate(k)>=start) out[k]=data[k]; });
   return out;
 }
-function monthEndData(dailyData){
-  const out={};
-  Object.keys(dailyData||{}).sort().forEach(k=>{
-    if(!isDateKey(k)) return;
-    out[k.slice(0,7)]=dailyData[k];
-  });
-  return out;
-}
-function lastEntries(data,count){
-  const out={};
-  Object.keys(data||{}).sort((a,b)=>keyDate(a)-keyDate(b)).slice(-count).forEach(k=>out[k]=data[k]);
-  return out;
-}
-function marketDisplayMode(){
-  return periodMode==='month'?'daily':'monthEnd';
-}
 function displaySeriesData(s,d){
   loadLiveSeriesCache();
   const rep=representativeSeriesData(s);
   if(d?.isLive && s.dailyData && Object.keys(s.dailyData).length){
-    const daily=filterByPeriod(s.dailyData);
-    const useData=marketDisplayMode()==='daily'?daily:lastEntries(monthEndData(daily),period*12);
-    return {data:useData,label:rep.label,sourceName:marketDisplayMode()==='daily'?'日次終値':'月末終値'};
+    return {data:filterByPeriod(s.dailyData),label:rep.label,sourceName:'日次終値'};
   }
   return {data:filterYears(rep.data),label:rep.label,sourceName:rep.sourceName};
 }
@@ -2851,7 +2833,7 @@ function hasFreshDailyForKeys(d,keys){
 function liveHint(d,keys){
   if(!d.isLive) return '';
   if(hasFreshDailyForKeys(d,keys)){
-    return marketDisplayMode()==='daily'?'月表示: 直近1か月の日次終値':'年表示: 月末終値で表示（1年=直近12か月）';
+    return '日次終値で表示（日次データは最大約10年分）';
   }
   if(hasDailyForKeys(d,keys)) return 'キャッシュが古いため最新日次を自動再取得中。取得後にカードとチャートを更新します';
   return 'この指標は年次の静的データです（日次更新の対象外）。日次更新の指標には「LIVE」表示があります';
@@ -3016,7 +2998,7 @@ function renderCrossCompare(forceShow=true){
     const col=C[i%C.length];
     const scaleRatio=medians[i] && primaryMedian ? Math.max(medians[i],primaryMedian)/Math.max(1e-9,Math.min(medians[i],primaryMedian)) : 1;
     const yAxis=!indexMode && i>0 && (item.unit!==baseUnit || scaleRatio>8) ? 'y2' : 'y';
-    return {label:item.label,data:labels.map(x=>item.data[x]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:3,tension:0.25,yAxisID:yAxis,fill:false};
+    return {label:item.label,data:labels.map(x=>item.data[x]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:labels.length>120?0:3,tension:labels.length>120?0:0.25,spanGaps:true,yAxisID:yAxis,fill:false};
   });
   document.getElementById('crossLeg').innerHTML=datasets.map((ds,i)=>{
     const unit=indexMode?'指数':(prepared[i].unit||'');
@@ -3108,6 +3090,11 @@ function selectCat(k){
   if(!data[k]) k=Object.keys(data)[0];
   cat=k; compareMode=false; compareKeys=[];
   activeKey=Object.keys(data[k].series)[0];
+  if(data[k].isLive){
+    loadLiveSeriesCache();
+    const firstDaily=Object.keys(data[k].series).find(x=>Object.keys(data[k].series[x].dailyData||{}).length);
+    if(firstDaily) activeKey=firstDaily;
+  }
   selectedPrefs=defaultPrefsFor(data[k]);
   document.getElementById('cmpBtn').classList.remove('on');
   document.getElementById('cmpNote').classList.remove('show');
@@ -3239,7 +3226,7 @@ function renderMetrics(){
       <div class="ms fl">日次データなし（グラフは年次の参考値）</div>
     </div>`;
     }
-    let latest, diff, sign, cls, subLabel='前期比';
+    let latest, diff, sign, cls, subLabel='前期比', staticNote='';
     if(s.lines){
       const firstLine=Object.values(s.lines)[0];
       const vals=Object.values(firstLine);
@@ -3260,6 +3247,9 @@ function renderMetrics(){
       const entries=Object.entries(sourceData||{})
         .filter(([,v])=>typeof v==='number'&&Number.isFinite(v))
         .sort((a,b)=>keyDate(a[0])-keyDate(b[0]));
+      if(d.isLive && !rep.sourceName && entries.length){
+        staticNote=entries[entries.length-1][0]+'年時点・自動更新なし';
+      }
       if(rep.sourceName){
         const latestKey=entries.length?entries[entries.length-1][0]:'';
         subLabel=rep.sourceName+(rep.sourceName==='日次終値'&&latestKey?' '+latestKey:'')+' / '+(rep.sourceName==='日次終値'?'前営業日比':'前期比');
@@ -3268,8 +3258,7 @@ function renderMetrics(){
       latest=vals[vals.length-1];
       const prev=vals[vals.length-2]||latest;
       const small=Math.abs(latest)<10;
-      diff=+(latest-prev).toFixed(small?4:2);
-      if(Math.abs(diff)<(small?0.00005:0.05)) diff=0;
+      diff=+(latest-prev).toFixed(small?4:2)||0;
       sign=diff>0?'+':'';
       cls=diff>0?'up':diff<0?'dn':'fl';
     }
@@ -3281,7 +3270,7 @@ function renderMetrics(){
     return `<div class="mc${extra}" onclick="clickMetric('${m.key}')">
       <div class="ml">${m.label}</div>
       <div class="mv">${hasLatest?fmtValue(latest,s.unit):'--'}</div>
-      <div class="ms ${cls||'fl'}">${s.lines?(hasDiff&&hasLatest?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:subLabel):(hasDiff?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:'取得待ち')}</div>
+      <div class="ms ${staticNote?'fl':(cls||'fl')}">${staticNote?staticNote:s.lines?(hasDiff&&hasLatest?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:subLabel):(hasDiff?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:'取得待ち')}</div>
     </div>`;
   }).join('');
 }
@@ -3295,7 +3284,7 @@ function renderDefinition(){
   const parts=[];
   if(d.definition) parts.push(d.definition);
   if(d.qualityNote) parts.push('<b>データ注意:</b> '+d.qualityNote);
-  if(d.isLive) parts.push('<b>LIVE表示:</b> データは毎日自動更新されます（朝7時・夕17:30 JST）。カードの数値はYahoo Financeの日次終値の最新値を表示します。チャートは「月」=直近1か月の日次終値、「1年」=直近12か月の月末終値、「2年」以上=各月末終値で表示します。年次固定値は未取得時だけの暫定表示です。');
+  if(d.isLive) parts.push('<b>LIVE表示:</b> データは毎日自動更新されます（朝7時・夕17:30 JST）。カードとチャートは、どの期間でも日次終値を表示します（日次データは最大約10年分）。カードに「自動更新なし」とある指標だけは年次の参考値です。');
   if(s?.definition) parts.push(s.definition);
   else if(s){
     const shape=s.lines?'複数系列':(isTimeSeriesData(s.data)?'年次時系列':'横断比較');
@@ -3407,10 +3396,12 @@ function chartTickLabel(value,index,ticks){
 
 function chartPointRadius(labels){
   if(periodMode==='month') return labels.length>25?1.8:2.4;
+  if(labels.length>120) return 0;  // 日次の長期は点を打たず線だけにする
   return labels.length>40?1.5:3;
 }
 
-function chartTension(){
+function chartTension(labels){
+  if(labels&&labels.length>120) return 0;
   return periodMode==='month'?0.15:0.25;
 }
 
@@ -3611,7 +3602,7 @@ function renderChart(){
     if(indexMode) fd=applyIdx(fd);
     const col=C[ci++%C.length];
     const yAxis=compareMode&&i===1&&d.series[keys[0]].unit!==s.unit?'y2':'y';
-    datasets.push({label:rep.label,data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:chartPointRadius(labels),tension:chartTension(),yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
+    datasets.push({label:rep.label,data:labels.map(y=>fd[y]??null),borderColor:col,backgroundColor:col+'18',borderWidth:2,pointRadius:chartPointRadius(labels),tension:chartTension(labels),spanGaps:true,yAxisID:yAxis,fill:datasets.length===0&&keys.length===1});
   });
 
   document.getElementById('leg').innerHTML=datasets.map((ds,i)=>{
@@ -3633,7 +3624,7 @@ function renderChart(){
   const titleText=d.label+(compareMode&&keys.length>1?` — ${keys.map(k=>d.series[k].label).join(' vs ')}`:(keys.length===1?` — ${d.series[keys[0]].label}`:''))+(indexMode?' （基準年=100）':'');
   document.getElementById('ctit').textContent=titleText;
   const isLive=d.isLive;
-  if(isLive){
+  if(isLive&&hasDailyForKeys(d,keys)){
     const badge=document.createElement('span');
     badge.className='live-badge';badge.textContent='LIVE';
     const el=document.getElementById('ctit');
@@ -3742,6 +3733,14 @@ async function renderAI(){
   el.className='ait ail'; el.textContent='解析中...';
   const k=activeKey||Object.keys(d.series)[0];
   const s=d.series[k];
+  if(d.isLive && Object.keys(s.dailyData||{}).length>=2){
+    const ks=Object.keys(s.dailyData).sort(), lastD=ks[ks.length-1];
+    const lv=s.dailyData[lastD], pv=s.dailyData[ks[ks.length-2]], diff=lv-pv;
+    const pct=(s.unit!=='%'&&pv)?`、${diff>0?'+':''}${(diff/pv*100).toFixed(2)}%`:'';
+    el.className='ait';
+    el.textContent=`${s.label}の最新は${lastD}の${fmtValue(lv,s.unit)}${s.unit}です。前営業日比は${diff>0?'+':''}${fmtValue(+diff.toFixed(4),s.unit)}${s.unit}${pct}です。`;
+    return;
+  }
   if(statScope==='world'){
     const src=d.srcLbl||'出典';
     const rep=representativeSeriesData(s);
@@ -4002,7 +4001,7 @@ async function fetchNews(){
         var lat = ks.map(function(k){return MARKET_JSON.series[c][k].latest;}).sort().slice(-1)[0];
         lastUpdated[c] = fmtJST(MARKET_JSON.generatedAt) + 'に自動取得 / 最新営業日 ' + (lat||'不明') + ' / ' + ks.length + '系列';
       });
-      try{ renderMetrics(); renderChart(); renderDefinition(); }catch(e){ console.warn(e); }
+      try{ selectCat(cat); renderMetrics(); renderChart(); renderDefinition(); renderAI(); }catch(e){ console.warn(e); }
     }
   }catch(e){ console.warn('market.json未取得', e); }
   try{

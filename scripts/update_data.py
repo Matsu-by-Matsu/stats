@@ -27,11 +27,12 @@ SYMBOLS = {
   'world_commodities': {'gold': 'GC=F', 'wti': 'CL=F', 'brent': 'BZ=F', 'silver': 'SI=F', 'copper': 'HG=F',
                         'natgas': 'NG=F', 'platinum': 'PL=F', 'corn': 'ZC=F', 'wheat': 'ZW=F', 'soybeans': 'ZS=F'},
 }
+FRED_RATES = {'us_ff': 'DFF', 'eu_policy': 'ECBMRRFR'}   # 米FF実効金利、ECB主要リファイナンス金利
 # 無料で使える公式の日次データが見つからない指標。推定や別物での代用はせず「取得失敗」と表示する
 NO_SOURCE = [{'id': 'stocks.topix', 'symbol': 'TOPIX', 'error': '無料の公式日次データがないため未取得'}]
 STALE_DAYS = 10        # 最新日がこの日数より古い系列は「古いまま」として報告する
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
-DAILY_DAYS = 400       # 直近400日は日次、それ以前は月末のみ(ファイルを軽くするため)
+DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
 
 def get(url, timeout=30, tries=3):
     last = None
@@ -161,6 +162,18 @@ def fetch_jgb10y():
     except Exception as e:
         return hist, '当月分CSVの取得失敗: ' + str(e)[:120]
 
+def fetch_fred(sid):
+    """米連銀セントルイス支店FREDの公開CSV(登録不要)。"""
+    start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
+    text = get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={start}', timeout=60).decode('utf-8', 'ignore')
+    out = {}
+    for l in text.splitlines()[1:]:
+        p = l.strip().split(',')
+        if len(p) != 2: continue
+        try: out[p[0]] = float(p[1])
+        except ValueError: continue   # 欠損
+    return out
+
 def update_market():
     old = load('market.json', {'series': {}})
     series = old.get('series', {})
@@ -180,6 +193,11 @@ def update_market():
             except Exception as e:
                 errors.append({'id': f'{cat}.{key}', 'symbol': sym, 'error': str(e)[:160]})
             time.sleep(0.4)
+    for key, sid in FRED_RATES.items():
+        try:
+            put('rates', key, sid, fetch_fred(sid), 'FRED(米連銀)')
+        except Exception as e:
+            errors.append({'id': 'rates.' + key, 'symbol': sid, 'error': str(e)[:160]})
     try:
         jgb, warn = fetch_jgb10y()
         put('rates', 'jp_10y', 'JGB10Y', jgb, '財務省 国債金利情報')
