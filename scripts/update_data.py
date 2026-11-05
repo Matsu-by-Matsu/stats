@@ -5,7 +5,7 @@
       data/status.json (取得成否の記録。サイト下部に表示)
 取得できなかった指標は「前回の値を保持」し、推定値は絶対に入れない。
 """
-import io, json, os, re, sys, time, unicodedata, urllib.request, urllib.parse, datetime as dt
+import io, json, os, re, sys, time, unicodedata, urllib.request, urllib.parse, zlib, datetime as dt
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
@@ -300,6 +300,59 @@ def fetch_inbound():
                 break
     return out
 
+# 年次PDFは数字が独自の文字番号で入っている(月次PDFは通常の文字)
+TIBOR_GLYPHS = {0x3EDA: '.', 0x3EDB: '/'}
+TIBOR_GLYPHS.update({0x3EDC + i: str(i) for i in range(10)})
+
+def pdf_text(raw):
+    """PDFの本文の文字を順につなげる。全銀協TIBORのPDF専用の簡易読み取り。"""
+    body = raw.decode('latin1')
+    parts = []
+    for m in re.finditer(r'stream\r?\n', body):
+        start = m.end()
+        try:
+            page = zlib.decompressobj().decompress(raw[start:body.find('endstream', start)]).decode('latin1')
+        except zlib.error:
+            continue
+        if 'BT' not in page: continue
+        for block in re.finditer(r'BT(.*?)ET', page, re.S):
+            for a in re.finditer(r'<([0-9A-Fa-f]+)>|\(((?:\\.|[^\\)])*)\)', block.group(1)):
+                if a.group(1) is not None:
+                    h = a.group(1)
+                    parts += [TIBOR_GLYPHS.get(int(h[i:i + 4], 16), '') for i in range(0, len(h), 4)]
+                else:
+                    parts.append(a.group(2))
+    return ''.join(parts)
+
+def parse_tibor(raw):
+    """3か月物を取り出す。列は5列(1週,1か月,3か月,6か月,12か月)か、2019年春までの6列(2か月あり)。"""
+    out = {}
+    for m in re.finditer(r'(\d{4})/(\d{2})/(\d{2})((?:\d\.\d{5})+)', pdf_text(raw)):
+        vals = re.findall(r'\d\.\d{5}', m.group(4))
+        col = {5: 2, 6: 3}.get(len(vals))
+        if col is not None:
+            out['%s-%s-%s' % m.groups()[:3]] = float(vals[col])
+    return out
+
+def fetch_tibor3m():
+    """全銀協TIBOR運営機関のPDF。過去分は初回だけ読み、以後は今年と今月の分だけ読む。"""
+    base = 'https://www.jbatibor.or.jp/rate/pdf/'
+    old = load('market.json', {}).get('series', {}).get('rates', {}).get('jp_tibor3m', {}).get('daily', {})
+    out = dict(old)
+    years = [NOW.year] if len(old) >= 1000 else range(2016, NOW.year + 1)
+    for y in years:
+        try:
+            out.update(parse_tibor(get(f'{base}JAPANESEYEN{y}.pdf', timeout=60)))
+        except Exception:
+            pass   # 年初は今年のファイルがまだない。今月分で補う
+        time.sleep(1)
+    html = get('https://www.jbatibor.or.jp/rate/', timeout=60).decode('utf-8', 'ignore')
+    m = re.search(r'JAPANESEYENTIBOR\d+\.pdf', html)
+    if not m:
+        raise RuntimeError('今月のレートのPDFが見つからない')
+    out.update(parse_tibor(get(base + m.group(0), timeout=60)))
+    return out
+
 def update_stats(put, errors):
     """公的統計(日次・月次・四半期)。1項目の失敗が他を止めないよう、取得元ごとに分ける。"""
     def many(source, freq, cat, fn):
@@ -315,6 +368,7 @@ def update_stats(put, errors):
             errors.append({'id': f'{cat}.{key}', 'symbol': symbol, 'error': str(e)[:160]})
     one('rates', 'jp_policy', 'STRDCLUCON', '日本銀行', 'daily', lambda: fetch_boj('FM01', 'STRDCLUCON'))
     one('rates', 'jp_basic', 'MADR1Z@D', '日本銀行', 'daily', lambda: fetch_boj('IR01', 'MADR1Z@D'))
+    one('rates', 'jp_tibor3m', 'TIBOR3M', '全銀協TIBOR運営機関', 'daily', fetch_tibor3m)
     many('総務省 消費者物価指数', 'monthly', 'cpi', fetch_cpi)
     many('財務省 貿易統計', 'monthly', 'trade', fetch_trade)
     one('employment', 'unemp', 'LRHUTTTTJPM156S', 'FRED(OECD経由)', 'monthly',
