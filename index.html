@@ -2272,7 +2272,7 @@ const DATA={
     ],
     series:{
       // 3M TIBOR：2025/12末1.091%、2026年上昇継続（全銀協公表値）
-      jp_tibor3m:{label:'日本 3M TIBOR',unit:'%',source:'https://www.jbatibor.or.jp/rate/',srcLbl:'全銀協TIBOR',definition:'<b>定義:</b> 全銀協TIBORの3か月物。銀行間取引の参照金利であり、国債利回りや政策金利ではありません。全銀協TIBOR運営機関が毎営業日に公表するPDFから自動取得しています。',data:{2005:0.07,2006:0.40,2007:0.77,2008:0.85,2009:0.48,2010:0.38,2011:0.34,2012:0.32,2013:0.24,2014:0.22,2015:0.17,2016:0.05,2017:0.06,2018:0.07,2019:0.06,2020:0.05,2021:0.05,2022:0.05,2023:0.12,2024:0.39,2025:1.09}},
+      jp_tibor3m:{label:'日本 3M TIBOR',unit:'%',digits:5,source:'https://www.jbatibor.or.jp/rate/',srcLbl:'全銀協TIBOR',definition:'<b>定義:</b> 全銀協TIBORの3か月物。銀行間取引の参照金利であり、国債利回りや政策金利ではありません。全銀協TIBOR運営機関が毎営業日に公表するPDFから自動取得しています。',data:{2005:0.07,2006:0.40,2007:0.77,2008:0.85,2009:0.48,2010:0.38,2011:0.34,2012:0.32,2013:0.24,2014:0.22,2015:0.17,2016:0.05,2017:0.06,2018:0.07,2019:0.06,2020:0.05,2021:0.05,2022:0.05,2023:0.12,2024:0.39,2025:1.09}},
       jp_10y:{label:'日本 10年国債',unit:'%',definition:'<b>定義:</b> 日本国債10年利回り。Yahoo Finance日次シンボルが安定取得できないためHTML内年次系列を暫定表示します。',data:{2005:1.45,2006:1.65,2007:1.60,2008:1.45,2009:1.30,2010:1.20,2011:1.05,2012:0.85,2013:0.75,2014:0.35,2015:0.30,2016:0.05,2017:0.05,2018:0.05,2019:-0.02,2020:0.02,2021:0.07,2022:0.42,2023:0.97,2024:1.05,2025:1.50}},
       jp_policy:{label:'日本 無担保コール翌日物（実績）',unit:'%',definition:'<b>定義:</b> 銀行同士が翌日まで貸し借りする金利の日次平均（日本銀行）。政策金利そのものではなく、政策金利に沿って動く市場の実績値です。自動更新できない時だけ、政策金利の年末近辺の代表値として置いた暫定系列。日次市場価格ではありません。',data:{2005:0.00,2006:0.25,2007:0.50,2008:0.10,2009:0.10,2010:0.10,2011:0.10,2012:0.10,2013:0.10,2014:0.10,2015:0.10,2016:-0.10,2017:-0.10,2018:-0.10,2019:-0.10,2020:-0.10,2021:-0.10,2022:-0.10,2023:0.10,2024:0.25,2025:0.50}},
       us_3m:{label:'米国 3か月T-Bill',unit:'%',source:'https://finance.yahoo.com/quote/%5EIRX/',srcLbl:'Yahoo Finance ^IRX',definition:'<b>定義:</b> CBOE 13 Week Treasury Bill Yield（^IRX）。米国短期国債利回りを日次終値で取得します。',data:{}},
@@ -3296,7 +3296,7 @@ function renderMetrics(){
     else extra=activeKey===m.key?' on':'';
     return `<div class="mc${extra}" onclick="clickMetric('${m.key}')">
       <div class="ml">${m.label}</div>
-      <div class="mv">${hasLatest?fmtValue(latest,s.unit):'--'}</div>
+      <div class="mv">${hasLatest?(s.digits?latest.toFixed(s.digits):fmtValue(latest,s.unit)):'--'}</div>
       <div class="ms ${staticNote?'fl':(cls||'fl')}">${staticNote?staticNote:s.lines?(hasDiff&&hasLatest?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:subLabel):(hasDiff?`${sign}${fmtValue(diff,s.unit)}（${subLabel}）`:'取得待ち')}</div>
     </div>`;
   }).join('');
@@ -3769,7 +3769,7 @@ async function renderAI(){
     const lv=s.dailyData[lastD], pv=s.dailyData[ks[ks.length-2]], diff=lv-pv;
     const pct=(s.unit!=='%'&&pv>0)?`、${diff>0?'+':''}${(diff/pv*100).toFixed(2)}%`:'';
     el.className='ait';
-    el.textContent=`${s.label}の最新は${fmtPeriodKey(lastD,s.liveFreq)}の${fmtValue(lv,s.unit)}${s.unit}です。${prevLabel(s.liveFreq,s.unit)}は${diff>0?'+':''}${fmtValue(+diff.toFixed(4),s.unit)}${s.unit}${pct}です。`;
+    el.textContent=`${s.label}の最新は${fmtPeriodKey(lastD,s.liveFreq)}の${s.digits?lv.toFixed(s.digits):fmtValue(lv,s.unit)}${s.unit}です。${prevLabel(s.liveFreq,s.unit)}は${diff>0?'+':''}${fmtValue(+diff.toFixed(4),s.unit)}${s.unit}${pct}です。`;
     return;
   }
   if(statScope==='world'){
