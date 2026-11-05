@@ -5,7 +5,7 @@
       data/status.json (取得成否の記録。サイト下部に表示)
 取得できなかった指標は「前回の値を保持」し、推定値は絶対に入れない。
 """
-import json, os, re, sys, time, urllib.request, urllib.parse, datetime as dt
+import io, json, os, re, sys, time, unicodedata, urllib.request, urllib.parse, datetime as dt
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
@@ -30,7 +30,7 @@ SYMBOLS = {
 FRED_RATES = {'us_ff': 'DFF', 'eu_policy': 'ECBMRRFR'}   # 米FF実効金利、ECB主要リファイナンス金利
 # 無料で使える公式の日次データが見つからない指標。推定や別物での代用はせず「取得失敗」と表示する
 NO_SOURCE = [{'id': 'stocks.topix', 'symbol': 'TOPIX', 'error': '無料の公式日次データがないため未取得'}]
-STALE_DAYS = 10        # 最新日がこの日数より古い系列は「古いまま」として報告する
+STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 200}   # 最新日がこの日数より古い系列は「古いまま」と報告
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
 
@@ -162,9 +162,9 @@ def fetch_jgb10y():
     except Exception as e:
         return hist, '当月分CSVの取得失敗: ' + str(e)[:120]
 
-def fetch_fred(sid):
+def fetch_fred(sid, start=None):
     """米連銀セントルイス支店FREDの公開CSV(登録不要)。"""
-    start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
+    start = start or (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
     text = get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={start}', timeout=60).decode('utf-8', 'ignore')
     out = {}
     for l in text.splitlines()[1:]:
@@ -174,17 +174,169 @@ def fetch_fred(sid):
         except ValueError: continue   # 欠損
     return out
 
+def fetch_boj(db, code):
+    """日本銀行 時系列統計データ検索サイトのAPI(登録不要)。日次の系列を返す。"""
+    q = urllib.parse.quote(code, safe='')
+    start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y%m')
+    out, pos = {}, ''
+    for _ in range(20):
+        j = json.loads(get(f'https://www.stat-search.boj.or.jp/api/v1/getDataCode?format=json&lang=jp&db={db}&code={q}&startDate={start}{pos}'))
+        v = j['RESULTSET'][0]['VALUES']
+        for d, x in zip(v['SURVEY_DATES'], v['VALUES']):
+            if x is not None:
+                s = str(d); out['%s-%s-%s' % (s[:4], s[4:6], s[6:8])] = float(x)
+        nxt = j.get('NEXTPOSITION')
+        if not nxt: break
+        pos = f'&startPosition={nxt}'
+        time.sleep(1.2)
+    time.sleep(1.2)
+    return out
+
+def month_key(y, m):
+    return '%04d-%02d' % (y, m)
+
+def monthly(daily):
+    """FREDの月初日付を YYYY-MM にする。"""
+    return {k[:7]: v for k, v in daily.items()}
+
+def yoy(index, n):
+    """nか月前(年次なら12、四半期なら4本前)との比。指数は公表値と同じ小数1桁にそろえて計算する。"""
+    keys = sorted(index)
+    out = {}
+    for i, k in enumerate(keys):
+        if i < n: continue
+        y, m = int(k[:4]), int(k[5:7])
+        prev = month_key(y - 1, m)
+        if prev in index and index[prev]:
+            out[k] = round((round(index[k], 1) / round(index[prev], 1) - 1) * 100, 1)
+    return out
+
+def fetch_cpi():
+    """総務省 消費者物価指数(全国・月次)。指数から前年同月比を出す。新しい基準を優先。"""
+    out = {'cpi_all': {}, 'cpi_food': {}, 'cpi_energy': {}}
+    names = {'cpi_all': '総合', 'cpi_food': '食料', 'cpi_energy': 'エネルギー'}
+    for url in ['https://www.stat.go.jp/data/cpi/2020/csv/zmi2020aa.csv',
+                'https://www.stat.go.jp/data/cpi/2025/csv/zmi2025aa.csv']:
+        lines = get(url, timeout=60).decode('cp932', 'ignore').splitlines()
+        head = [c.strip() for c in lines[0].split(',')]
+        idx = {k: {} for k in names}
+        for l in lines[1:]:
+            p = l.split(',')
+            d = p[0].strip()
+            if not re.fullmatch(r'\d{6}', d): continue
+            for k, name in names.items():
+                try: idx[k][d[:4] + '-' + d[4:]] = float(p[head.index(name)])
+                except ValueError: pass
+        for k in names:
+            out[k].update(yoy(idx[k], 12))
+    return out
+
+def fetch_trade():
+    """財務省 貿易統計の月別総額。千円を兆円へ。まだ公表のない月は0なので除く。"""
+    text = get('https://www.customs.go.jp/toukei/suii/html/data/d41ma.csv', timeout=60).decode('cp932', 'ignore')
+    exp, imp, bal = {}, {}, {}
+    for l in text.splitlines():
+        m = re.match(r'(\d{4})/(\d{2}),\s*(\d+)\s*,\s*(\d+)', l)
+        if not m or int(m.group(3)) == 0: continue
+        k = m.group(1) + '-' + m.group(2)
+        e, i = int(m.group(3)), int(m.group(4))
+        exp[k] = round(e / 1e9, 3); imp[k] = round(i / 1e9, 3); bal[k] = round((e - i) / 1e9, 3)
+    return {'exports': exp, 'imports': imp, 'balance': bal}
+
+def fetch_housing():
+    """国交省 建築着工統計の時系列Excel。戸を万戸へ。"""
+    import xlrd
+    book = xlrd.open_workbook(file_contents=get('https://www.mlit.go.jp/sogoseisaku/jouhouka/content/jyuu_ken.xls', timeout=60))
+    sh = book.sheet_by_name('jyuu')
+    cols = {'starts_total': 1, 'starts_owned': 5, 'starts_rental': 9, 'starts_condo': 15, 'starts_detached': 18}
+    out = {k: {} for k in cols}
+    year, month = None, 0
+    for r in range(sh.nrows):
+        a = sh.cell_value(r, 0)
+        if isinstance(a, str):
+            m = re.fullmatch(r'([SHR])(\d+|元)年(\d+)月', unicodedata.normalize('NFKC', a).replace(' ', ''))
+            if m:
+                year = ERA[m.group(1)] + (1 if m.group(2) == '元' else int(m.group(2)))
+                month = int(m.group(3))
+            elif year and a.strip():
+                year = None   # 表の終わり
+                continue
+            else:
+                continue
+        elif isinstance(a, float) and year and 1 <= a <= 12:
+            month = int(a)
+            if month == 1: year += 1
+        else:
+            continue
+        if not year: continue
+        for k, c in cols.items():
+            v = sh.cell_value(r, c)
+            if isinstance(v, float) and v > 0:
+                out[k][month_key(year, month)] = round(v / 1e4, 2)
+    return out
+
+def fetch_inbound():
+    """JNTO 訪日外客数(総数)。Excelのファイル名は毎月変わるので一覧ページから探す。人を万人へ。"""
+    from openpyxl import load_workbook
+    html = get('https://www.jnto.go.jp/statistics/data/visitors-statistics/', timeout=60).decode('utf-8', 'ignore')
+    m = re.search(r'href="([^"]+\.xlsx)"[^>]*>[^<]*国籍/月別', html)
+    if not m:
+        raise RuntimeError('一覧ページに月別Excelが見つからない')
+    wb = load_workbook(io.BytesIO(get(urllib.parse.urljoin('https://www.jnto.go.jp/', m.group(1)), timeout=60)), read_only=True, data_only=True)
+    out = {}
+    for name in wb.sheetnames:
+        if not re.fullmatch(r'\d{4}', name): continue
+        months = {}
+        for row in wb[name].iter_rows(values_only=True):
+            if not months:
+                months = {i: int(re.match(r'(\d+)月', c).group(1)) for i, c in enumerate(row)
+                          if isinstance(c, str) and re.fullmatch(r'\d+月', c.strip())}
+                continue
+            if row[0] == '総数':
+                for i, mo in months.items():
+                    if isinstance(row[i], (int, float)) and row[i] > 0:
+                        out[month_key(int(name), mo)] = round(row[i] / 1e4, 1)
+                break
+    return out
+
+def update_stats(put, errors):
+    """公的統計(日次・月次・四半期)。1項目の失敗が他を止めないよう、取得元ごとに分ける。"""
+    def many(source, freq, cat, fn):
+        try:
+            for key, data in fn().items():
+                put(cat, key, source, data, source, freq)
+        except Exception as e:
+            errors.append({'id': cat, 'symbol': source, 'error': str(e)[:160]})
+    def one(cat, key, symbol, source, freq, fn):
+        try:
+            put(cat, key, symbol, fn(), source, freq)
+        except Exception as e:
+            errors.append({'id': f'{cat}.{key}', 'symbol': symbol, 'error': str(e)[:160]})
+    one('rates', 'jp_policy', 'STRDCLUCON', '日本銀行', 'daily', lambda: fetch_boj('FM01', 'STRDCLUCON'))
+    one('rates', 'jp_basic', 'MADR1Z@D', '日本銀行', 'daily', lambda: fetch_boj('IR01', 'MADR1Z@D'))
+    many('総務省 消費者物価指数', 'monthly', 'cpi', fetch_cpi)
+    many('財務省 貿易統計', 'monthly', 'trade', fetch_trade)
+    one('employment', 'unemp', 'LRHUTTTTJPM156S', 'FRED(OECD経由)', 'monthly',
+        lambda: monthly(fetch_fred('LRHUTTTTJPM156S', '2000-01-01')))
+    one('gdp', 'gdp_nom', 'JPNNGDP', 'FRED(内閣府)', 'quarterly',
+        lambda: {k: round(v / 1000, 1) for k, v in monthly(fetch_fred('JPNNGDP', '2000-01-01')).items()})
+    one('gdp', 'gdp_growth', 'JPNRGDPEXP', 'FRED(内閣府)', 'quarterly',
+        lambda: yoy(monthly(fetch_fred('JPNRGDPEXP', '2000-01-01')), 4))
+    many('国交省 建築着工統計', 'monthly', 'housing', fetch_housing)
+    one('tourism', 'inbound', 'JNTO', '日本政府観光局(JNTO)', 'monthly', fetch_inbound)
+
 def update_market():
     old = load('market.json', {'series': {}})
     series = old.get('series', {})
     errors = list(NO_SOURCE)
-    def put(cat, key, symbol, daily, source):
-        daily, bad = validate(daily, cat)
+    def put(cat, key, symbol, daily, source, freq='daily'):
+        # 公的統計は負の値(物価の下落、貿易赤字)や大きな変動も実在するので、飛び値の判定はしない
+        daily, bad = validate(daily, cat if freq == 'daily' else 'rates')
         if len(daily) < 20:
             raise RuntimeError('有効データ不足(%d件)' % len(daily))
         latest = max(daily)
         series.setdefault(cat, {})[key] = {
-            'symbol': symbol, 'source': source, 'latest': latest, 'latestValue': daily[latest],
+            'symbol': symbol, 'source': source, 'latest': latest, 'latestValue': daily[latest], 'freq': freq,
             'fetchedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'rejected': bad, 'daily': compress(daily)}
     for cat, m in SYMBOLS.items():
         for key, sym in m.items():
@@ -204,6 +356,7 @@ def update_market():
         if warn: errors.append({'id': 'rates.jp_10y', 'symbol': 'MOF', 'error': warn})
     except Exception as e:
         errors.append({'id': 'rates.jp_10y', 'symbol': 'MOF', 'error': str(e)[:160]})
+    update_stats(put, errors)
     save('market.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'series': series})
     return errors
 
@@ -304,9 +457,10 @@ def update_news():
 
 def stale_errors(series):
     """全滅時に保持した古い値を、成功に見せないための点検。"""
-    limit = (NOW - dt.timedelta(days=STALE_DAYS)).strftime('%Y-%m-%d')
+    def limit(s):
+        return (NOW - dt.timedelta(days=STALE_DAYS.get(s.get('freq'), 10))).strftime('%Y-%m-%d')
     return [{'id': f'{c}.{k}', 'symbol': s.get('symbol'), 'error': '最新データが古いまま(%s)' % s.get('latest')}
-            for c, m in series.items() for k, s in m.items() if str(s.get('latest')) < limit]
+            for c, m in series.items() for k, s in m.items() if str(s.get('latest')) < limit(s)]
 
 if __name__ == '__main__':
     os.makedirs(DATA, exist_ok=True)

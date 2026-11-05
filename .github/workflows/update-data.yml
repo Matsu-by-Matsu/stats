@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Excelを読む部品を入れる
+        run: pip install xlrd==2.0.1 openpyxl==3.1.5
       - name: 前回のデータを公開サイトから読み込む
         run: |
           mkdir -p data
