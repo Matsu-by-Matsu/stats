@@ -529,7 +529,7 @@ def fetch_occupancy():
                 months = {i: int(re.match(r'\d+', c.strip()).group(0)) for i, c in enumerate(row)
                           if isinstance(c, str) and re.fullmatch(r'\d+月', c.strip())}
                 continue
-            if row[0] == '全国' and row[1] == '計':
+            if str(row[0]).replace('　', '').strip() == '全国' and row[1] == '計':   # 表では「全　国」と書かれている
                 for i, mo in months.items():
                     if i in years and i < len(row) and isinstance(row[i], (int, float)):
                         out[month_key(years[i], mo)] = round(float(row[i]), 1)
