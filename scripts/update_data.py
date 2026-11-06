@@ -465,6 +465,8 @@ def fetch_population():
     out = {'total_pop': dict(old_series('population', 'total_pop')), 'elderly_rate': dict(old_series('population', 'elderly_rate')),
            'working_age': dict(old_series('population', 'working_age'))}
     keys = {('総数', '人口'): ('total_pop', 0), ('65歳以上', '割合'): ('elderly_rate', 1), ('15歳~64歳', '割合'): ('working_age', 1)}
+    # 古い表は千人単位。単位の違う値が混ざらないよう万人にそろえる
+    out['total_pop'] = {k: (round(v / 10, 1) if v > 50000 else v) for k, v in out['total_pop'].items()}
     months = recent_months(4 if len(out['total_pop']) >= 20 else 30)
     for y, m in months:
         try:
@@ -475,7 +477,8 @@ def fetch_population():
                 d = re.match(r'(\d{4})年(\d+)月', str(row[2]).replace(' ', ''))
                 k = keys.get((unicodedata.normalize('NFKC', str(row[3])).replace(' ', ''), row[4]))
                 if d and k and isinstance(row[6], (int, float)):
-                    out[k[0]][month_key(int(d.group(1)), int(d.group(2)))] = round(float(row[6]), k[1])
+                    value = float(row[6]) / (10 if str(row[5]).strip() == '千人' else 1)
+                    out[k[0]][month_key(int(d.group(1)), int(d.group(2)))] = round(value, 1)
         except Exception as e:
             log('人口 %d-%d 読み取り失敗 %s' % (y, m, str(e)[:80]))
         time.sleep(0.5)
@@ -506,7 +509,7 @@ def fetch_occupancy():
     """観光庁 宿泊旅行統計の推移表。全国・全施設の客室稼働率(月次)。"""
     from openpyxl import load_workbook
     html = get('https://www.mlit.go.jp/kankocho/tokei_hakusyo/shukuhakutokei.html', timeout=60).decode('utf-8', 'ignore')
-    m = re.search(r'href="([^"]+\.xlsx)"[^>]*>\s*推移表', html)
+    m = re.search(r'href="([^"]+\.xlsx)"[^>]*>(?:\s|<[^>]+>)*推移表', html)
     if not m:
         raise RuntimeError('宿泊旅行統計の推移表が見つからない')
     wb = load_workbook(io.BytesIO(get('https://www.mlit.go.jp' + m.group(1), timeout=120)), read_only=True, data_only=True)
