@@ -2155,7 +2155,7 @@ const DATA={
     metrics:[
       {key:'unemp',label:'完全失業率（%）'},
       {key:'parttime',label:'非正規雇用比率（%）'},
-      {key:'womenjob',label:'女性就業率25-44歳（%）'},
+      {key:'womenjob',label:'女性就業率25-44歳（原数値・%）'},
     ],
     series:{
       unemp:{label:'完全失業率',unit:'%',data:{2000:4.7,2001:5.0,2002:5.4,2003:5.3,2004:4.7,2005:4.4,2006:4.1,2007:3.9,2008:4.0,2009:5.1,2010:5.1,2011:4.6,2012:4.3,2013:4.0,2014:3.6,2015:3.4,2016:3.1,2017:2.8,2018:2.4,2019:2.4,2020:2.8,2021:2.8,2022:2.6,2023:2.6,2024:2.5}},
@@ -2496,7 +2496,7 @@ const JREIT_META=[{"code":"8951","name":"日本ビルファンド投資法人","
 let cat='population';
 let activeKey=null;
 // 自動更新データの周期ごとの呼び方
-const FREQ={daily:{name:'日次',prev:'前営業日',badge:'LIVE'},monthly:{name:'月次',prev:'前月',badge:'月次'},quarterly:{name:'四半期',prev:'前期',badge:'四半期'}};
+const FREQ={daily:{name:'日次',prev:'前営業日',badge:'LIVE'},monthly:{name:'月次',prev:'前月',badge:'月次'},quarterly:{name:'四半期',prev:'前期',badge:'四半期'},annual:{name:'年次',prev:'前年',badge:'年次'}};
 function isTimeKey(k){return /^\d{4}(-\d{2}(-\d{2})?)?$/.test(String(k));}
 function timeLabel(ms,withDay){
   const d=new Date(ms),m=String(d.getMonth()+1).padStart(2,'0');

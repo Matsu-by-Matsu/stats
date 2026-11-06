@@ -29,7 +29,7 @@ SYMBOLS = {
   'world_commodities': {'gold': 'GC=F', 'wti': 'CL=F', 'brent': 'BZ=F', 'silver': 'SI=F', 'copper': 'HG=F',
                         'natgas': 'NG=F', 'platinum': 'PL=F', 'corn': 'ZC=F', 'wheat': 'ZW=F', 'soybeans': 'ZS=F'},
 }
-STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 300}   # 最新日がこの日数より古い系列は「古いまま」と報告
+STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 300, 'annual': 800}   # 最新日がこの日数より古い系列は「古いまま」と報告
 REVERT_DAYS = 5        # この営業日数以内に元の水準へ戻る急変はデータの誤りとして扱う
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
@@ -501,9 +501,9 @@ def fetch_outbound():
     return out
 
 def era_year(text):
-    m = re.search(r'(平成|令和)(\d+|元)年', unicodedata.normalize('NFKC', text).replace(' ', ''))
+    m = re.search(r'(昭和|平成|令和)(\d+|元)年', unicodedata.normalize('NFKC', text).replace(' ', ''))
     if not m: return None
-    return (1988 if m.group(1) == '平成' else 2018) + (1 if m.group(2) == '元' else int(m.group(2)))
+    return {'昭和': 1925, '平成': 1988, '令和': 2018}[m.group(1)] + (1 if m.group(2) == '元' else int(m.group(2)))
 
 def fetch_occupancy():
     """観光庁 宿泊旅行統計の推移表。全国・全施設の客室稼働率(月次)。"""
@@ -536,6 +536,51 @@ def fetch_occupancy():
                 break
     return out
 
+def labour_rows(file_id, sheet, cols):
+    """総務省 労働力調査の長期時系列表を月ごとに読む。"""
+    wb = estat_book(file_id)
+    year, prev, out = None, 0, {}
+    for row in wb[sheet].iter_rows(values_only=True):
+        b = re.fullmatch(r'(\d+)月', unicodedata.normalize('NFKC', str(row[1] or '')).strip())
+        if not b: continue
+        month = int(b.group(1))
+        if year is None:
+            year = era_year(str(row[0] or ''))
+            if year is None: continue
+        elif month == 1 and prev == 12:
+            year += 1
+        prev = month
+        vals = [row[c] for c in cols]
+        if all(isinstance(v, (int, float)) for v in vals):
+            out[month_key(year, month)] = vals
+    return out
+
+def fetch_parttime():
+    """非正規の割合 = 非正規 ÷ (正規 + 非正規)。季節調整値。"""
+    rows = labour_rows('000032061153', '季節調整値', [4, 7])
+    return {k: round(v[1] / (v[0] + v[1]) * 100, 1) for k, v in rows.items()}
+
+def fetch_women():
+    """女性25〜44歳の就業率 = 就業者 ÷ 15歳以上人口(25〜34歳と35〜44歳の合計)。原数値。"""
+    pop = labour_rows('000031831366', '原数値', [25, 26])
+    emp = labour_rows('000031831359', '原数値', [25, 26])
+    return {k: round(sum(emp[k]) / sum(pop[k]) * 100, 1) for k in emp if k in pop}
+
+def fetch_spend():
+    """観光庁 訪日外国人旅行消費額。一覧ページに最新の四半期が載るので、公表分を積み上げる。"""
+    html = get('https://www.mlit.go.jp/kankocho/tokei_hakusyo/gaikokujinshohidoko.html', timeout=60).decode('utf-8', 'ignore')
+    text = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html))
+    m = re.search(r'(\d{4})年(\d+)～\d+月期[^○]*○訪日外国人旅行消費額 (?:(\d+)兆)?([\d,]+)億円', text)
+    out = dict(old_series('tourism', 'inbound_spend'))
+    if m:
+        out[month_key(int(m.group(1)), int(m.group(2)))] = round((int(m.group(3) or 0) * 10000 + int(m.group(4).replace(',', ''))) / 10000, 4)
+    return out
+
+def fetch_gdp_per():
+    """World Bank 一人当たり名目GDP(円)。万円へ。年次。"""
+    j = json.loads(get(f'https://api.worldbank.org/v2/country/JPN/indicator/NY.GDP.PCAP.CN?format=json&per_page=100&date=2000:{NOW.year}', timeout=60))
+    return {x['date']: round(x['value'] / 1e4, 1) for x in j[1] if x.get('value') is not None}
+
 def update_stats(put, errors):
     """公的統計(日次・月次・四半期)。1項目の失敗が他を止めないよう、取得元ごとに分ける。"""
     def many(source, freq, cat, fn):
@@ -544,9 +589,9 @@ def update_stats(put, errors):
                 put(cat, key, source, data, source, freq)
         except Exception as e:
             errors.append({'id': cat, 'symbol': source, 'error': str(e)[:160]})
-    def one(cat, key, symbol, source, freq, fn):
+    def one(cat, key, symbol, source, freq, fn, minimum=20):
         try:
-            put(cat, key, symbol, fn(), source, freq)
+            put(cat, key, symbol, fn(), source, freq, minimum)
         except Exception as e:
             errors.append({'id': f'{cat}.{key}', 'symbol': symbol, 'error': str(e)[:160]})
     one('rates', 'jp_policy', 'STRDCLUCON', '日本銀行', 'daily', lambda: fetch_boj('FM01', 'STRDCLUCON'))
@@ -560,6 +605,10 @@ def update_stats(put, errors):
     many('日本政府観光局(JNTO)', 'monthly', 'tourism', fetch_inbound)
     one('employment', 'unemp', 'LT01-A10', '総務省 労働力調査', 'monthly', fetch_unemployment)
     many('内閣府 国民経済計算', 'quarterly', 'gdp', fetch_gdp)
+    one('gdp', 'gdp_per', 'NY.GDP.PCAP.CN', 'World Bank', 'annual', fetch_gdp_per)
+    one('employment', 'parttime', 'LT01-A40', '総務省 労働力調査', 'monthly', fetch_parttime)
+    one('employment', 'womenjob', 'LT01-A20/B10', '総務省 労働力調査', 'monthly', fetch_women)
+    one('tourism', 'inbound_spend', 'KANKO', '観光庁 インバウンド消費動向調査', 'quarterly', fetch_spend, minimum=1)
     many('総務省 人口推計', 'monthly', 'population', fetch_population)
     one('tourism', 'outbound', 'MOJ', '出入国在留管理庁 出入国管理統計', 'monthly', fetch_outbound)
     one('tourism', 'hotel_occ', 'KANKO', '観光庁 宿泊旅行統計', 'monthly', fetch_occupancy)
@@ -568,10 +617,10 @@ def update_market():
     old = load('market.json', {'series': {}})
     series = old.get('series', {})
     errors = []
-    def put(cat, key, symbol, daily, source, freq='daily'):
+    def put(cat, key, symbol, daily, source, freq='daily', minimum=20):
         # 公的統計は負の値(物価の下落、貿易赤字)や大きな変動も実在するので、飛び値の判定はしない
         daily, bad = validate(daily, cat if freq == 'daily' else 'rates')
-        if len(daily) < 20:
+        if len(daily) < minimum:
             raise RuntimeError('有効データ不足(%d件)' % len(daily))
         latest = max(daily)
         series.setdefault(cat, {})[key] = {
@@ -734,6 +783,35 @@ WB_SERIES = {'world_population.population': ('SP.POP.TOTL', 1e6, 1), 'world_pric
              'world_employment.unemployment': ('SL.UEM.TOTL.ZS', 1, 2), 'world_employment.income_proxy': ('NY.GDP.PCAP.KD.ZG', 1, 2),
              'world_rates.real_interest': ('FR.INR.RINR', 1, 2)}
 
+BIGMAC_NAMES = {'JPN': '日本', 'USA': '米国', 'CHN': '中国', 'EUZ': 'ユーロ圏', 'GBR': '英国', 'CHE': 'スイス', 'IND': 'インド', 'BRA': 'ブラジル',
+                'AUS': '豪州', 'CAN': 'カナダ', 'KOR': '韓国', 'THA': 'タイ', 'VNM': 'ベトナム', 'ZAF': '南アフリカ', 'ARE': 'UAE', 'AZE': 'アゼルバイジャン',
+                'ARG': 'アルゼンチン', 'ISR': 'イスラエル', 'IDN': 'インドネシア', 'UKR': 'ウクライナ', 'URY': 'ウルグアイ', 'EGY': 'エジプト', 'OMN': 'オマーン',
+                'QAT': 'カタール', 'KWT': 'クウェート', 'GTM': 'グアテマラ', 'CRI': 'コスタリカ', 'COL': 'コロンビア', 'SAU': 'サウジ', 'SGP': 'シンガポール',
+                'SWE': 'スウェーデン', 'LKA': 'スリランカ', 'CZE': 'チェコ', 'CHL': 'チリ', 'DNK': 'デンマーク', 'TUR': 'トルコ', 'NIC': 'ニカラグア',
+                'NZL': 'ニュージーランド', 'NOR': 'ノルウェー', 'HUN': 'ハンガリー', 'BHR': 'バーレーン', 'PAK': 'パキスタン', 'PHL': 'フィリピン', 'VEN': 'ベネズエラ',
+                'PER': 'ペルー', 'HND': 'ホンジュラス', 'POL': 'ポーランド', 'MYS': 'マレーシア', 'MEX': 'メキシコ', 'MDA': 'モルドバ', 'JOR': 'ヨルダン',
+                'ROU': 'ルーマニア', 'LBN': 'レバノン', 'RUS': 'ロシア', 'TWN': '台湾', 'HKG': '香港'}
+
+def fetch_bigmac():
+    """The Economistの公開データ。円換算は同じ日の日本の為替で計算する(サイトの既存値と同じ方法)。"""
+    text = get('https://raw.githubusercontent.com/TheEconomist/big-mac-data/master/output-data/big-mac-full-index.csv', timeout=60).decode('utf-8', 'ignore')
+    rows = list(csv.DictReader(io.StringIO(text)))
+    jpy = {r['date']: float(r['dollar_ex']) for r in rows if r['iso_a3'] == 'JPN'}
+    out = {'yen_price': {}, 'usd_raw': {}, 'usd_adjusted': {}, 'dollar_price': {}}
+    def put_value(key, name, day, text, scale):
+        try: out[key].setdefault(name, {})[day] = round(float(text) * scale, 2)
+        except (TypeError, ValueError): pass
+    for r in rows:
+        name = BIGMAC_NAMES.get(r['iso_a3'])
+        if not name: continue
+        day = r['date']
+        put_value('dollar_price', name, day, r['dollar_price'], 1)
+        put_value('usd_raw', name, day, r['USD_raw'], 100)
+        put_value('usd_adjusted', name, day, r.get('USD_adjusted'), 100)
+        if day in jpy:
+            put_value('yen_price', name, day, r['dollar_price'], jpy[day])
+    return out
+
 def update_world():
     """World Bank(登録不要)の年次統計。国別のまま保存し、画面の既存データに重ねる。"""
     old = load('world.json', {}).get('series', {})
@@ -753,6 +831,12 @@ def update_world():
         except Exception as e:
             errors.append({'id': key, 'symbol': ind, 'error': str(e)[:160]})
         time.sleep(0.5)
+    try:
+        for key, data in fetch_bigmac().items():
+            if len(data) >= 30:
+                old['world_bigmac.' + key] = data
+    except Exception as e:
+        errors.append({'id': 'world_bigmac', 'symbol': 'Economist', 'error': str(e)[:160]})
     save('world.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'series': old})
     return errors
 
