@@ -520,6 +520,7 @@ def fetch_occupancy():
             if not years:
                 cur = None
                 for i, c in enumerate(row):
+                    if i == 0: continue   # A列は表のタイトルで、年の見出しではない
                     y = era_year(c) if isinstance(c, str) else None
                     cur = y or cur
                     if cur: years[i] = cur
