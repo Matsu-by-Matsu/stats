@@ -428,6 +428,110 @@ def fetch_tibor3m():
     out.update(parse_tibor(get(base + m.group(0), timeout=60)))
     return out
 
+ESTAT_MONTH = {1: '110103', 2: '110103', 3: '110103', 4: '120406', 5: '120406', 6: '120406',
+               7: '230709', 8: '230709', 9: '230709', 10: '241012', 11: '241012', 12: '241012'}
+ESTAT_POP = 'page=1&layout=datalist&cycle=1&toukei=00200524&tstat=000000090001&tclass1=000001011678&tclass2val=0'
+ESTAT_TRAVEL = 'page=1&layout=datalist&cycle=1&toukei=00250011&tstat=000001012480&tclass1=000001012481&tclass2=000001062142&tclass3val=0'
+
+def estat_files(query, year, month):
+    """e-Statの月別一覧から (ファイルID, 表題) を返す。"""
+    html = get(f'https://www.e-stat.go.jp/stat-search/files?{query}&year={year}0&month={ESTAT_MONTH[month]}{month:02d}', timeout=60).decode('utf-8', 'ignore')
+    out = []
+    for part in html.split('stat-dataset_list-item')[1:]:
+        m = re.search(r'statInfId=(\d+)', part)
+        if m:
+            out.append((m.group(1), re.sub(r'<[^>]+>', ' ', part)))
+    return out
+
+def recent_months(count):
+    y, m = NOW.year, NOW.month
+    out = []
+    for _ in range(count):
+        out.append((y, m))
+        m -= 1
+        if m == 0: y, m = y - 1, 12
+    return out[::-1]   # 古い順。新しい確定値で上書きするため
+
+def estat_book(file_id):
+    from openpyxl import load_workbook
+    raw = get(f'https://www.e-stat.go.jp/stat-search/file-download?statInfId={file_id}&fileKind=0', timeout=60)
+    return load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+
+def old_series(cat, key):
+    return load('market.json', {}).get('series', {}).get(cat, {}).get(key, {}).get('daily', {})
+
+def fetch_population():
+    """総務省 人口推計(月次)。概算値と確定値が同じ表に入っているので全部読む。初回だけ過去分をさかのぼる。"""
+    out = {'total_pop': dict(old_series('population', 'total_pop')), 'elderly_rate': dict(old_series('population', 'elderly_rate')),
+           'working_age': dict(old_series('population', 'working_age'))}
+    keys = {('総数', '人口'): ('total_pop', 0), ('65歳以上', '割合'): ('elderly_rate', 1), ('15歳~64歳', '割合'): ('working_age', 1)}
+    months = recent_months(4 if len(out['total_pop']) >= 20 else 30)
+    for y, m in months:
+        try:
+            files = [f for f in estat_files(ESTAT_POP, y, m) if '年齢' in f[1]]
+            if not files: continue
+            for row in estat_book(files[0][0]).worksheets[0].iter_rows(values_only=True):
+                if len(row) < 7 or row[1] != '総人口': continue
+                d = re.match(r'(\d{4})年(\d+)月', str(row[2]).replace(' ', ''))
+                k = keys.get((unicodedata.normalize('NFKC', str(row[3])).replace(' ', ''), row[4]))
+                if d and k and isinstance(row[6], (int, float)):
+                    out[k[0]][month_key(int(d.group(1)), int(d.group(2)))] = round(float(row[6]), k[1])
+        except Exception as e:
+            log('人口 %d-%d 読み取り失敗 %s' % (y, m, str(e)[:80]))
+        time.sleep(0.5)
+    return out
+
+def fetch_outbound():
+    """出入国在留管理庁 出入国管理統計(月次)の全国の日本人出国者数。人を万人へ。"""
+    out = dict(old_series('tourism', 'outbound'))
+    for y, m in recent_months(4 if len(out) >= 20 else 30):
+        try:
+            files = [f for f in estat_files(ESTAT_TRAVEL, y, m) if '港別' in f[1]]
+            if not files: continue
+            for row in estat_book(files[0][0]).worksheets[0].iter_rows(values_only=True):
+                if len(row) >= 6 and row[0] == '全国' and row[1] == '総数' and isinstance(row[5], (int, float)):
+                    out[month_key(y, m)] = round(row[5] / 1e4, 1)
+                    break
+        except Exception as e:
+            log('出国者 %d-%d 読み取り失敗 %s' % (y, m, str(e)[:80]))
+        time.sleep(0.5)
+    return out
+
+def era_year(text):
+    m = re.search(r'(平成|令和)(\d+|元)年', unicodedata.normalize('NFKC', text).replace(' ', ''))
+    if not m: return None
+    return (1988 if m.group(1) == '平成' else 2018) + (1 if m.group(2) == '元' else int(m.group(2)))
+
+def fetch_occupancy():
+    """観光庁 宿泊旅行統計の推移表。全国・全施設の客室稼働率(月次)。"""
+    from openpyxl import load_workbook
+    html = get('https://www.mlit.go.jp/kankocho/tokei_hakusyo/shukuhakutokei.html', timeout=60).decode('utf-8', 'ignore')
+    m = re.search(r'href="([^"]+\.xlsx)"[^>]*>\s*推移表', html)
+    if not m:
+        raise RuntimeError('宿泊旅行統計の推移表が見つからない')
+    wb = load_workbook(io.BytesIO(get('https://www.mlit.go.jp' + m.group(1), timeout=120)), read_only=True, data_only=True)
+    out = {}
+    for name in ('旧4-2', '4-1'):
+        years, months = {}, {}
+        for row in wb[name].iter_rows(values_only=True):
+            if not years:
+                cur = None
+                for i, c in enumerate(row):
+                    y = era_year(c) if isinstance(c, str) else None
+                    cur = y or cur
+                    if cur: years[i] = cur
+                continue
+            if not months:
+                months = {i: int(re.match(r'\d+', c.strip()).group(0)) for i, c in enumerate(row)
+                          if isinstance(c, str) and re.fullmatch(r'\d+月', c.strip())}
+                continue
+            if row[0] == '全国' and row[1] == '計':
+                for i, mo in months.items():
+                    if i in years and i < len(row) and isinstance(row[i], (int, float)):
+                        out[month_key(years[i], mo)] = round(float(row[i]), 1)
+                break
+    return out
+
 def update_stats(put, errors):
     """公的統計(日次・月次・四半期)。1項目の失敗が他を止めないよう、取得元ごとに分ける。"""
     def many(source, freq, cat, fn):
@@ -452,6 +556,9 @@ def update_stats(put, errors):
     many('日本政府観光局(JNTO)', 'monthly', 'tourism', fetch_inbound)
     one('employment', 'unemp', 'LT01-A10', '総務省 労働力調査', 'monthly', fetch_unemployment)
     many('内閣府 国民経済計算', 'quarterly', 'gdp', fetch_gdp)
+    many('総務省 人口推計', 'monthly', 'population', fetch_population)
+    one('tourism', 'outbound', 'MOJ', '出入国在留管理庁 出入国管理統計', 'monthly', fetch_outbound)
+    one('tourism', 'hotel_occ', 'KANKO', '観光庁 宿泊旅行統計', 'monthly', fetch_occupancy)
 
 def update_market():
     old = load('market.json', {'series': {}})
