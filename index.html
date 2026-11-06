@@ -2334,7 +2334,7 @@ const WORLD_DATA={"world_population":{"label":"世界人口","color":"#185FA5","
 // 世界人口はWorld Bank APIの実績値を百万人単位に丸めて表示する。年次系列なので20年表示では直線に近く見える。
 if(WORLD_DATA.world_population){
   WORLD_DATA.world_population.definition='<b>定義:</b> World Bank SP.POP.TOTL（総人口）を百万人単位に換算した年次系列です。2006-2024年の実績値を表示し、人口は年次で滑らかに増えるため、20年表示では直線に近く見えます。';
-  WORLD_DATA.world_population.qualityNote='World Bank SP.POP.TOTLを百万人単位に換算。2024年は8,140.9百万人。年次データであり、月次・日次ではありません。';
+  WORLD_DATA.world_population.qualityNote='World Bank SP.POP.TOTLを百万人単位に換算。年次データであり、月次・日次ではありません。';
 }
 
 // World BankのFR.INR.RINRは政策金利や10年国債利回りではないため、画面上でも明確に分ける。
@@ -2715,7 +2715,12 @@ function ensureLiveMetric(catKey,key,label,unit){
   ['world_commodities','corn','とうもろこし先物','セント/bu'],
   ['world_commodities','wheat','小麦先物','セント/bu'],
   ['world_commodities','soybeans','大豆先物','セント/bu'],
-  ['rates','jp_basic','日本 基準貸付利率','%']
+  ['rates','jp_basic','日本 基準貸付利率','%'],
+  ['tourism','inbound_kr','訪日客 韓国','万人'],
+  ['tourism','inbound_cn','訪日客 中国','万人'],
+  ['tourism','inbound_tw','訪日客 台湾','万人'],
+  ['tourism','inbound_hk','訪日客 香港','万人'],
+  ['tourism','inbound_us','訪日客 米国','万人']
 ].forEach(args=>ensureLiveMetric(...args));
 if(WORLD_DATA.world_stocks){
   WORLD_DATA.world_stocks.definition='<b>定義:</b> Yahoo Financeの主要株価指数を日次で取得します。S&P500、NASDAQ、日経平均、DAX、FTSE100、Hang Sengに加え、Dow Jones、Russell 2000、Euro Stoxx 50、CAC 40、上海総合、SENSEXを取得対象にしています。';
@@ -4039,6 +4044,21 @@ async function fetchNews(){
       try{ selectCat(cat); renderMetrics(); renderChart(); renderDefinition(); renderAI(); }catch(e){ console.warn(e); }
     }
   }catch(e){ console.warn('market.json未取得', e); }
+  try{
+    var rw = await fetch('data/world.json?_=' + Date.now(), {cache:'no-store'});
+    if(rw.ok){
+      var wj = await rw.json();
+      Object.keys(wj.series || {}).forEach(function(id){  // World Bankの最新年次を既存の国別データに重ねる
+        var p = id.split('.'), s = WORLD_DATA[p[0]] && WORLD_DATA[p[0]].series[p[1]];
+        if(!s) return;
+        s.countryData = s.countryData || {};
+        Object.keys(wj.series[id]).forEach(function(n){
+          s.countryData[n] = Object.assign({}, s.countryData[n] || {}, wj.series[id][n]);
+        });
+      });
+      if(statScope === 'world'){ try{ renderMetrics(); renderChart(); renderWorldRanking(); }catch(e){ console.warn(e); } }
+    }
+  }catch(e){ console.warn('world.json未取得', e); }
   try{
     var r2 = await fetch('data/status.json?_=' + Date.now(), {cache:'no-store'});
     if(r2.ok){

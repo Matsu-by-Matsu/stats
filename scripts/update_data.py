@@ -5,7 +5,7 @@
       data/status.json (取得成否の記録。サイト下部に表示)
 取得できなかった指標は「前回の値を保持」し、推定値は絶対に入れない。
 """
-import io, json, os, re, sys, time, unicodedata, urllib.request, urllib.parse, zlib, datetime as dt
+import csv, io, json, os, re, sys, time, unicodedata, urllib.request, urllib.parse, zlib, datetime as dt
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
@@ -181,18 +181,6 @@ def fetch_jgb10y():
     except Exception as e:
         return hist, '当月分CSVの取得失敗: ' + str(e)[:120]
 
-def fetch_fred(sid, start=None):
-    """米連銀セントルイス支店FREDの公開CSV(登録不要)。"""
-    start = start or (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
-    text = get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={start}', timeout=30).decode('utf-8', 'ignore')
-    out = {}
-    for l in text.splitlines()[1:]:
-        p = l.strip().split(',')
-        if len(p) != 2: continue
-        try: out[p[0]] = float(p[1])
-        except ValueError: continue   # 欠損
-    return out
-
 def fetch_effr():
     """ニューヨーク連銀の米FF実効金利(登録不要)。"""
     start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
@@ -235,10 +223,6 @@ def fetch_boj(db, code):
 def month_key(y, m):
     return '%04d-%02d' % (y, m)
 
-def monthly(daily):
-    """FREDの月初日付を YYYY-MM にする。"""
-    return {k[:7]: v for k, v in daily.items()}
-
 def yoy(index, n):
     """nか月前(年次なら12、四半期なら4本前)との比。指数は公表値と同じ小数1桁にそろえて計算する。"""
     keys = sorted(index)
@@ -250,6 +234,58 @@ def yoy(index, n):
         if prev in index and index[prev]:
             out[k] = round((round(index[k], 1) / round(index[prev], 1) - 1) * 100, 1)
     return out
+
+def fetch_unemployment():
+    """総務省 労働力調査の長期時系列(季節調整値)。ファイルIDは毎月同じで中身が更新される。"""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(get('https://www.e-stat.go.jp/stat-search/file-download?statInfId=000031831358&fileKind=0', timeout=60)),
+                       read_only=True, data_only=True)
+    year, prev, out = None, 0, {}
+    for row in wb['季節調整値'].iter_rows(min_col=1, max_col=20, values_only=True):
+        a = unicodedata.normalize('NFKC', str(row[0] or ''))
+        b = re.fullmatch(r'(\d+)月', unicodedata.normalize('NFKC', str(row[1] or '')).strip())
+        if not b: continue
+        month = int(b.group(1))
+        if year is None:
+            m = re.search(r'(\d+)年', a)
+            if not m: continue
+            year = 1925 + int(m.group(1))   # 表の先頭は昭和28年
+        elif month == 1 and prev == 12:
+            year += 1
+        prev = month
+        if isinstance(row[19], (int, float)):
+            out[month_key(year, month)] = float(row[19])
+    return out
+
+def fetch_gdp():
+    """内閣府 国民経済計算の四半期別GDP速報。名目(季節調整・年率)と実質(前年同期比)。"""
+    site = 'https://www.esri.cao.go.jp'
+    menu = None
+    for y in (NOW.year, NOW.year - 1):
+        try:
+            page = get(f'{site}/jp/sna/data/data_list/sokuhou/files/{y}/toukei_{y}.html', timeout=60).decode('utf-8', 'ignore')
+        except Exception:
+            continue
+        m = re.search(r'href="([^"]+)gdemenuja\.html"', page)
+        if m:
+            menu = site + m.group(1)
+            break
+    if not menu:
+        raise RuntimeError('内閣府の最新表が見つからない')
+    html = get(menu + 'gdemenuja.html', timeout=60).decode('utf-8', 'ignore')
+    def table(prefix):
+        m = re.search(r'href="(tables/' + prefix + r'\d+\.csv)"', html)
+        if not m:
+            raise RuntimeError(prefix + ' の表が見つからない')
+        rows, year = {}, None
+        for r in csv.reader(io.StringIO(get(menu + m.group(1), timeout=60).decode('cp932', 'ignore'))):
+            f = re.fullmatch(r'(?:(\d{4})/)?\s*(\d{1,2})-\s*\d{1,2}\.', r[0].strip()) if r else None
+            if not f or len(r) < 2: continue
+            if f.group(1): year = int(f.group(1))
+            try: rows[month_key(year, int(f.group(2)))] = float(r[1].replace(',', '').strip())
+            except ValueError: pass
+        return rows
+    return {'gdp_nom': {k: round(v / 1000, 1) for k, v in table('gaku-mk').items()}, 'gdp_growth': table('ritu-jg')}
 
 def fetch_cpi():
     """総務省 消費者物価指数(全国・月次)。指数から前年同月比を出す。新しい基準を優先。"""
@@ -316,14 +352,15 @@ def fetch_housing():
     return out
 
 def fetch_inbound():
-    """JNTO 訪日外客数(総数)。Excelのファイル名は毎月変わるので一覧ページから探す。人を万人へ。"""
+    """JNTO 訪日外客数(総数と主な国・地域)。Excelのファイル名は毎月変わるので一覧ページから探す。人を万人へ。"""
     from openpyxl import load_workbook
     html = get('https://www.jnto.go.jp/statistics/data/visitors-statistics/', timeout=60).decode('utf-8', 'ignore')
     m = re.search(r'href="([^"]+\.xlsx)"[^>]*>[^<]*国籍/月別', html)
     if not m:
         raise RuntimeError('一覧ページに月別Excelが見つからない')
     wb = load_workbook(io.BytesIO(get(urllib.parse.urljoin('https://www.jnto.go.jp/', m.group(1)), timeout=60)), read_only=True, data_only=True)
-    out = {}
+    rows = {'総数': 'inbound', '韓国': 'inbound_kr', '中国': 'inbound_cn', '台湾': 'inbound_tw', '香港': 'inbound_hk', '米国': 'inbound_us'}
+    out = {k: {} for k in rows.values()}
     for name in wb.sheetnames:
         if not re.fullmatch(r'\d{4}', name): continue
         months = {}
@@ -332,11 +369,10 @@ def fetch_inbound():
                 months = {i: int(re.match(r'(\d+)月', c.strip()).group(1)) for i, c in enumerate(row)
                           if isinstance(c, str) and re.fullmatch(r'\d+月', c.strip())}
                 continue
-            if row[0] == '総数':
+            if row[0] in rows:
                 for i, mo in months.items():
                     if i < len(row) and isinstance(row[i], (int, float)) and row[i] > 0:
-                        out[month_key(int(name), mo)] = round(row[i] / 1e4, 1)
-                break
+                        out[rows[row[0]]][month_key(int(name), mo)] = round(row[i] / 1e4, 1)
     return out
 
 # 年次PDFは数字が独自の文字番号で入っている(月次PDFは通常の文字)
@@ -413,14 +449,9 @@ def update_stats(put, errors):
     many('総務省 消費者物価指数', 'monthly', 'cpi', fetch_cpi)
     many('財務省 貿易統計', 'monthly', 'trade', fetch_trade)
     many('国交省 建築着工統計', 'monthly', 'housing', fetch_housing)
-    one('tourism', 'inbound', 'JNTO', '日本政府観光局(JNTO)', 'monthly', fetch_inbound)
-    # FREDはGitHubから時間切れになることがあるので最後に回す。取れない時は前回の値が残る
-    one('employment', 'unemp', 'LRHUTTTTJPM156S', 'FRED(OECD経由)', 'monthly',
-        lambda: monthly(fetch_fred('LRHUTTTTJPM156S', '2000-01-01')))
-    one('gdp', 'gdp_nom', 'JPNNGDP', 'FRED(内閣府)', 'quarterly',
-        lambda: {k: round(v / 1000, 1) for k, v in monthly(fetch_fred('JPNNGDP', '2000-01-01')).items()})
-    one('gdp', 'gdp_growth', 'JPNRGDPEXP', 'FRED(内閣府)', 'quarterly',
-        lambda: yoy(monthly(fetch_fred('JPNRGDPEXP', '2000-01-01')), 4))
+    many('日本政府観光局(JNTO)', 'monthly', 'tourism', fetch_inbound)
+    one('employment', 'unemp', 'LT01-A10', '総務省 労働力調査', 'monthly', fetch_unemployment)
+    many('内閣府 国民経済計算', 'quarterly', 'gdp', fetch_gdp)
 
 def update_market():
     old = load('market.json', {'series': {}})
@@ -582,6 +613,38 @@ def stale_errors(series):
     return [{'id': f'{c}.{k}', 'symbol': s.get('symbol'), 'error': '最新データが古いまま(%s)' % s.get('latest')}
             for c, m in series.items() for k, s in m.items() if str(s.get('latest')) < limit(s)]
 
+WB_COUNTRIES = {'世界': 'WLD', 'インド': 'IND', '中国': 'CHN', '米国': 'USA', 'インドネシア': 'IDN', 'パキスタン': 'PAK',
+                'ナイジェリア': 'NGA', 'ブラジル': 'BRA', 'バングラデシュ': 'BGD', 'ロシア': 'RUS', 'メキシコ': 'MEX', 'エチオピア': 'ETH',
+                '日本': 'JPN', 'フィリピン': 'PHL', 'エジプト': 'EGY', 'ベトナム': 'VNM', 'コンゴ民主共和国': 'COD', 'トルコ': 'TUR',
+                'イラン': 'IRN', 'ドイツ': 'DEU', 'タイ': 'THA', '英国': 'GBR', 'フランス': 'FRA', 'イタリア': 'ITA', 'タンザニア': 'TZA',
+                '南アフリカ': 'ZAF', 'ミャンマー': 'MMR', 'ケニア': 'KEN', '韓国': 'KOR', 'コロンビア': 'COL', 'スペイン': 'ESP',
+                'アルゼンチン': 'ARG', 'カナダ': 'CAN', '豪州': 'AUS', 'サウジ': 'SAU'}
+WB_SERIES = {'world_population.population': ('SP.POP.TOTL', 1e6, 1), 'world_prices.inflation': ('FP.CPI.TOTL.ZG', 1, 2),
+             'world_employment.unemployment': ('SL.UEM.TOTL.ZS', 1, 2), 'world_employment.income_proxy': ('NY.GDP.PCAP.KD.ZG', 1, 2),
+             'world_rates.real_interest': ('FR.INR.RINR', 1, 2)}
+
+def update_world():
+    """World Bank(登録不要)の年次統計。国別のまま保存し、画面の既存データに重ねる。"""
+    old = load('world.json', {}).get('series', {})
+    names = {v: k for k, v in WB_COUNTRIES.items()}
+    errors = []
+    codes = ';'.join(names)
+    for key, (ind, div, digits) in WB_SERIES.items():
+        try:
+            j = json.loads(get(f'https://api.worldbank.org/v2/country/{codes}/indicator/{ind}?format=json&per_page=2000&date=2005:{NOW.year}', timeout=60))
+            data = {}
+            for x in j[1]:
+                if x.get('value') is not None and x.get('countryiso3code') in names:
+                    data.setdefault(names[x['countryiso3code']], {})[x['date']] = round(x['value'] / div, digits)
+            if len(data) < 10:
+                raise RuntimeError('国数が少なすぎる(%d)' % len(data))
+            old[key] = data
+        except Exception as e:
+            errors.append({'id': key, 'symbol': ind, 'error': str(e)[:160]})
+        time.sleep(0.5)
+    save('world.json', {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'), 'series': old})
+    return errors
+
 if __name__ == '__main__':
     os.makedirs(DATA, exist_ok=True)
     log('市場データの取得開始')
@@ -590,6 +653,8 @@ if __name__ == '__main__':
     me += update_flow()
     log('ニュースの取得開始')
     ne = update_news()
+    log('世界統計の取得開始')
+    ne += update_world()
     log('取得終了')
     mk = load('market.json', {}).get('series', {})
     news = load('news.json', {}).get('regions', {})

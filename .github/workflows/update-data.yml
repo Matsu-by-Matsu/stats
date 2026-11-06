@@ -33,7 +33,7 @@ jobs:
       - name: 前回のデータを公開サイトから読み込む
         run: |
           mkdir -p data
-          for f in market news flow; do
+          for f in market news flow world; do
             curl -fsSL -o "data/$f.json" "https://matsu-by-matsu.github.io/stats/data/$f.json?_=$(date +%s)" || rm -f "data/$f.json"
           done
       - name: データ取得
