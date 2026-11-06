@@ -29,7 +29,6 @@ SYMBOLS = {
   'world_commodities': {'gold': 'GC=F', 'wti': 'CL=F', 'brent': 'BZ=F', 'silver': 'SI=F', 'copper': 'HG=F',
                         'natgas': 'NG=F', 'platinum': 'PL=F', 'corn': 'ZC=F', 'wheat': 'ZW=F', 'soybeans': 'ZS=F'},
 }
-FRED_RATES = {'us_ff': 'DFF', 'eu_policy': 'ECBMRRFR'}   # 米FF実効金利、ECB主要リファイナンス金利
 STALE_DAYS = {'daily': 10, 'monthly': 100, 'quarterly': 300}   # 最新日がこの日数より古い系列は「古いまま」と報告
 REVERT_DAYS = 5        # この営業日数以内に元の水準へ戻る急変はデータの誤りとして扱う
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
@@ -185,13 +184,34 @@ def fetch_jgb10y():
 def fetch_fred(sid, start=None):
     """米連銀セントルイス支店FREDの公開CSV(登録不要)。"""
     start = start or (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
-    text = get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={start}', timeout=60).decode('utf-8', 'ignore')
+    text = get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={start}', timeout=30).decode('utf-8', 'ignore')
     out = {}
     for l in text.splitlines()[1:]:
         p = l.strip().split(',')
         if len(p) != 2: continue
         try: out[p[0]] = float(p[1])
         except ValueError: continue   # 欠損
+    return out
+
+def fetch_effr():
+    """ニューヨーク連銀の米FF実効金利(登録不要)。"""
+    start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
+    end = NOW.strftime('%Y-%m-%d')
+    j = json.loads(get(f'https://markets.newyorkfed.org/api/rates/unsecured/effr/search.json?startDate={start}&endDate={end}&type=rate', timeout=60))
+    return {r['effectiveDate']: float(r['percentRate']) for r in j['refRates'] if r.get('percentRate') is not None}
+
+def fetch_ecb_rate():
+    """欧州中央銀行の主要リファイナンス金利(登録不要)。"""
+    start = (NOW - dt.timedelta(days=DAILY_DAYS)).strftime('%Y-%m-%d')
+    text = get(f'https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.MRR_FR.LEV?format=csvdata&startPeriod={start}', timeout=60).decode('utf-8', 'ignore')
+    lines = text.splitlines()
+    head = lines[0].split(',')
+    day, value = head.index('TIME_PERIOD'), head.index('OBS_VALUE')
+    out = {}
+    for l in lines[1:]:
+        p = l.split(',')
+        if len(p) > value and p[value]:
+            out[p[day]] = float(p[value])
     return out
 
 def fetch_boj(db, code):
@@ -388,16 +408,19 @@ def update_stats(put, errors):
     one('rates', 'jp_policy', 'STRDCLUCON', '日本銀行', 'daily', lambda: fetch_boj('FM01', 'STRDCLUCON'))
     one('rates', 'jp_basic', 'MADR1Z@D', '日本銀行', 'daily', lambda: fetch_boj('IR01', 'MADR1Z@D'))
     one('rates', 'jp_tibor3m', 'TIBOR3M', '全銀協TIBOR運営機関', 'daily', fetch_tibor3m)
+    one('rates', 'us_ff', 'EFFR', 'ニューヨーク連銀', 'daily', fetch_effr)
+    one('rates', 'eu_policy', 'ECB MRO', '欧州中央銀行', 'daily', fetch_ecb_rate)
     many('総務省 消費者物価指数', 'monthly', 'cpi', fetch_cpi)
     many('財務省 貿易統計', 'monthly', 'trade', fetch_trade)
+    many('国交省 建築着工統計', 'monthly', 'housing', fetch_housing)
+    one('tourism', 'inbound', 'JNTO', '日本政府観光局(JNTO)', 'monthly', fetch_inbound)
+    # FREDはGitHubから時間切れになることがあるので最後に回す。取れない時は前回の値が残る
     one('employment', 'unemp', 'LRHUTTTTJPM156S', 'FRED(OECD経由)', 'monthly',
         lambda: monthly(fetch_fred('LRHUTTTTJPM156S', '2000-01-01')))
     one('gdp', 'gdp_nom', 'JPNNGDP', 'FRED(内閣府)', 'quarterly',
         lambda: {k: round(v / 1000, 1) for k, v in monthly(fetch_fred('JPNNGDP', '2000-01-01')).items()})
     one('gdp', 'gdp_growth', 'JPNRGDPEXP', 'FRED(内閣府)', 'quarterly',
         lambda: yoy(monthly(fetch_fred('JPNRGDPEXP', '2000-01-01')), 4))
-    many('国交省 建築着工統計', 'monthly', 'housing', fetch_housing)
-    one('tourism', 'inbound', 'JNTO', '日本政府観光局(JNTO)', 'monthly', fetch_inbound)
 
 def update_market():
     old = load('market.json', {'series': {}})
@@ -419,11 +442,6 @@ def update_market():
             except Exception as e:
                 errors.append({'id': f'{cat}.{key}', 'symbol': sym, 'error': str(e)[:160]})
             time.sleep(0.4)
-    for key, sid in FRED_RATES.items():
-        try:
-            put('rates', key, sid, fetch_fred(sid), 'FRED(米連銀)')
-        except Exception as e:
-            errors.append({'id': 'rates.' + key, 'symbol': sid, 'error': str(e)[:160]})
     try:
         jgb, warn = fetch_jgb10y()
         put('rates', 'jp_10y', 'JGB10Y', jgb, '財務省 国債金利情報')
