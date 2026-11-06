@@ -3291,6 +3291,9 @@ function renderMetrics(){
         subLabel=rep.sourceName+(rep.freq&&latestKey?' '+fmtPeriodKey(latestKey,rep.freq):'')+' / '+(rep.freq?prevLabel(rep.freq,s.unit):'前期比');
       }
       const vals=entries.map(([,v])=>v);
+      if(rep.freq && vals.length<2){  // 比較できる前の値がない時は「0」と見せない
+        staticNote=rep.sourceName+' '+fmtPeriodKey(entries[entries.length-1][0],rep.freq)+'・比較データ蓄積中';
+      }
       latest=vals[vals.length-1];
       const prev=vals[vals.length-2]||latest;
       const small=Math.abs(latest)<10;
@@ -3779,6 +3782,12 @@ async function renderAI(){
     const pct=(s.unit!=='%'&&pv>0)?`、${diff>0?'+':''}${(diff/pv*100).toFixed(2)}%`:'';
     el.className='ait';
     el.textContent=`${s.label}の最新は${fmtPeriodKey(lastD,s.liveFreq)}の${s.digits?lv.toFixed(s.digits):fmtValue(lv,s.unit)}${s.unit}です。${prevLabel(s.liveFreq,s.unit)}は${diff>0?'+':''}${fmtValue(+diff.toFixed(4),s.unit)}${s.unit}${pct}です。`;
+    return;
+  }
+  if(d.isLive && Object.keys(s.dailyData||{}).length===1){
+    const only=Object.keys(s.dailyData)[0];
+    el.className='ait';
+    el.textContent=s.label+'の最新は'+fmtPeriodKey(only,s.liveFreq)+'の'+fmtValue(s.dailyData[only],s.unit)+s.unit+'です。公表のたびに記録を積み上げます。';
     return;
   }
   if(statScope==='world'){
