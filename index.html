@@ -2835,6 +2835,10 @@ function displaySeriesData(s,d){
   if(d?.isLive && s.dailyData && Object.keys(s.dailyData).length){
     return {data:filterByPeriod(s.dailyData),label:rep.label,sourceName:(FREQ[s.liveFreq]||FREQ.daily).name,freq:s.liveFreq||'daily'};
   }
+  if(!Object.keys(rep.data||{}).length && s.lines){  // 複数の線を持つ指標は、比較では最初の線を使う
+    const [lineName,line]=Object.entries(s.lines)[0];
+    return {data:filterYears(line),label:s.label+'（'+lineName+'）',sourceName:lineName};
+  }
   return {data:filterYears(rep.data),label:rep.label,sourceName:rep.sourceName};
 }
 function latestSeriesData(s,d){

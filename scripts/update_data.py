@@ -35,15 +35,34 @@ REVERT_DAYS = 5        # この営業日数以内に元の水準へ戻る急変�
 MAX_JUMP = 0.35        # 前日比35%超の変化は異常値候補(validate参照)
 DAILY_DAYS = 3700      # 約10年分は日次のまま持つ。それ以前(国債の古い分)は月末のみ
 
-def get(url, timeout=30, tries=3):
+DEADLINE = time.time() + 600   # 取得は最長10分。残りの取得は諦めて、取れた分を必ず公開する
+HOST_LIMIT = 4                 # 同じ取得先が続けてこの回数失敗したら、今回はその取得先を飛ばす
+HOST_FAILS = {}
+
+def log(message):
+    print(time.strftime('%H:%M:%S'), message, flush=True)
+
+def get(url, timeout=30, tries=2):
+    host = urllib.parse.urlsplit(url).hostname
     last = None
     for i in range(tries):
+        left = DEADLINE - time.time()
+        if left <= 0:
+            raise RuntimeError('制限時間のため取得を中止')
+        if HOST_FAILS.get(host, 0) >= HOST_LIMIT:
+            raise RuntimeError(host + ' が応答しないため今回は中止')
         try:
             req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read()
+            with urllib.request.urlopen(req, timeout=min(timeout, left)) as r:
+                data = r.read()
+            HOST_FAILS[host] = 0
+            return data
         except Exception as e:
             last = e
+            code = getattr(e, 'code', None)
+            if code is None or code == 429 or code >= 500:   # 404などは取得先の不調ではない
+                HOST_FAILS[host] = HOST_FAILS.get(host, 0) + 1
+            log('失敗 %s %s' % (url[:80], str(e)[:80]))
             time.sleep(2 * (i + 1))
     raise last
 
@@ -547,7 +566,13 @@ def stale_errors(series):
 
 if __name__ == '__main__':
     os.makedirs(DATA, exist_ok=True)
-    me = update_market() + update_flow(); ne = update_news()
+    log('市場データの取得開始')
+    me = update_market()
+    log('マネーフローの取得開始')
+    me += update_flow()
+    log('ニュースの取得開始')
+    ne = update_news()
+    log('取得終了')
     mk = load('market.json', {}).get('series', {})
     news = load('news.json', {}).get('regions', {})
     status = {'generatedAt': NOW.strftime('%Y-%m-%dT%H:%MZ'),
